@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="#0b0f14"/>
+  <!-- Gold ring -->
+  <circle cx="256" cy="220" r="140" fill="none" stroke="#f0c040" stroke-width="12"/>
+  <!-- Football -->
+  <circle cx="256" cy="220" r="110" fill="#f0f2f5"/>
+  <!-- Pentagon patches -->
+  <circle cx="256" cy="220" r="28" fill="#0b0f14"/>
+  <path d="M256 120 l16 50 h-32z" fill="#0b0f14" opacity="0.85"/>
+  <path d="M256 320 l16-50 h-32z" fill="#0b0f14" opacity="0.85"/>
+  <path d="M156 190 l50 16 v-32z" fill="#0b0f14" opacity="0.85"/>
+  <path d="M356 190 l-50 16 v-32z" fill="#0b0f14" opacity="0.85"/>
+  <path d="M175 280 l42-30 -24-24z" fill="#0b0f14" opacity="0.85"/>
+  <path d="M337 280 l-42-30 24-24z" fill="#0b0f14" opacity="0.85"/>
+  <!-- Trophy cup -->
+  <path d="M210 380 h92 l-10 30 h-72z" fill="#f0c040"/>
+  <rect x="236" y="360" width="40" height="22" rx="4" fill="#f0c040"/>
+  <path d="M200 340 q0-20 20-20 h72 q20 0 20 20 v10 q0 30-56 30 q-56 0-56-30z" fill="#f0c040"/>
+  <path d="M200 342 q-30 0-30 28 t30 20" fill="none" stroke="#f0c040" stroke-width="10" stroke-linecap="round"/>
+  <path d="M312 342 q30 0 30 28 t-30 20" fill="none" stroke="#f0c040" stroke-width="10" stroke-linecap="round"/>
+  <!-- 2026 text -->
+  <text x="256" y="490" font-family="Arial,sans-serif" font-weight="900" font-size="56" fill="#f0c040" text-anchor="middle" letter-spacing="4">2026</text>
+</svg>

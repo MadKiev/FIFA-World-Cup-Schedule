@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>World Cup 2026</title>
+
+<!-- PWA manifest -->
+<link rel="manifest" href="manifest.json">
+
+<!-- iOS PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="WC2026">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-startup-image" href="icon-512.png">
+
+<!-- Android / Chrome -->
+<meta name="theme-color" content="#0b0f14">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+
+<!-- SEO / share -->
+<meta name="description" content="FIFA World Cup 2026 live schedule, group tables & bracket — Kyiv time">
+<meta property="og:title" content="World Cup 2026">
+<meta property="og:description" content="Live schedule, groups & bracket in Kyiv time">
+<meta property="og:image" content="icon-512.png">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap');
+:root{
+  --green:#0a5c36;--green-b:#2ecc71;
+  --gold:#f0c040;--gold-d:#c9a020;
+  --white:#f0f2f5;--gray:#7a8694;--gray-l:#a8b2bc;
+  --dark:#0b0f14;--card:#141a22;--card2:#1a2230;
+  --border:#232d3a;--red:#e74c3c;--blue:#4a9eff;
+}
+*{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;box-sizing:border-box;margin:0;padding:0}
+html{height:-webkit-fill-available;scroll-behavior:smooth}
+body{font-family:-apple-system,'Inter',sans-serif;background:var(--dark);color:var(--white);min-height:100vh;min-height:-webkit-fill-available;-webkit-overflow-scrolling:touch;overflow-x:hidden}
+button{-webkit-appearance:none;appearance:none;border:none;cursor:pointer;font-family:inherit}
+input{-webkit-appearance:none;appearance:none;font-family:inherit}
+
+/* HEADER */
+header{background:linear-gradient(160deg,#0d2818,#062010 60%,#030e08);border-bottom:1px solid rgba(240,192,64,.2);padding:14px 16px 10px;position:sticky;top:0;z-index:200;padding-top:max(env(safe-area-inset-top),14px)}
+.h-row1{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:var(--gold);line-height:1}
+.logo span{color:var(--white)}
+.logo-sub{font-size:9px;color:var(--gray);letter-spacing:1px;text-transform:uppercase;margin-top:1px}
+.clock{text-align:right}
+.clock-t{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;color:var(--gold);line-height:1}
+.clock-d{font-size:10px;color:var(--gray-l)}
+
+.status-bar{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:11px}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--gray);flex-shrink:0;transition:background .3s}
+.sdot.ok{background:var(--green-b);animation:blink 2s infinite}
+.sdot.err{background:var(--red)}
+.sdot.loading{background:var(--gold);animation:blink .7s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.stxt{color:var(--gray-l);flex:1;font-size:10px}
+.btn-r{background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--white);padding:4px 10px;border-radius:6px;font-size:11px;min-height:28px}
+.btn-r:disabled{opacity:.4}
+.lfetch{font-size:10px;color:var(--gray);white-space:nowrap}
+
+.nav-tabs{display:flex;gap:0;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:8px}
+.nav-tab{flex:1;padding:8px 4px;font-size:11px;font-weight:600;color:var(--gray);background:none;border:none;letter-spacing:.3px;text-align:center;min-height:36px;transition:background .18s,color .18s}
+.nav-tab.active{background:var(--gold);color:#000}
+
+.filters{display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.filters::-webkit-scrollbar{display:none}
+.fb{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--gray-l);padding:5px 11px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap;min-height:30px;transition:all .15s}
+.fb.active{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
+.search-wrap{position:relative;flex-shrink:0}
+.search-input{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--white);padding:5px 11px 5px 24px;border-radius:20px;font-size:11px;outline:none;width:130px;-webkit-appearance:none}
+.search-input:focus{border-color:var(--gold)}
+.search-input::placeholder{color:var(--gray)}
+.si{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--gray);pointer-events:none}
+
+main{padding:10px 14px 80px;max-width:900px;margin:0 auto;overflow-x:hidden}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* STATS */
+.stats-bar{display:flex;background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.stat{flex:1;display:flex;flex-direction:column;align-items:center;padding:8px 2px;border-right:1px solid var(--border)}
+.stat:last-child{border-right:none}
+.stat-n{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--gold);line-height:1}
+.stat-l{font-size:9px;color:var(--gray);text-transform:uppercase;letter-spacing:.4px;margin-top:1px}
+
+/* DAY GROUPS */
+.day-group{margin-bottom:14px}
+.day-header{display:flex;align-items:center;gap:7px;padding:4px 0;margin-bottom:6px}
+.day-pip{width:4px;height:4px;border-radius:50%;background:var(--gold);flex-shrink:0}
+.day-label{font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:2px;color:var(--gold)}
+.day-div{flex:1;height:1px;background:var(--border)}
+.day-cnt{font-size:10px;color:var(--gray)}
+
+/* MATCH CARD */
+.mc-wrap{margin-bottom:5px}
+.mc{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:9px 12px;
+  display:flex;align-items:center;gap:9px;
+  position:relative;overflow:hidden;
+  cursor:default;transition:border-color .2s
+}
+.mc::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent}
+.mc.live{border-color:rgba(231,76,60,.45);background:rgba(231,76,60,.06);cursor:pointer}
+.mc.live::before{background:var(--red)}
+.mc.live:active{opacity:.85}
+.mc.finished{opacity:.5}
+.mc.finished:hover{opacity:.75}
+.mc.next::before{background:var(--green-b)}
+.mc.next{border-color:rgba(46,204,113,.3)}
+
+.tc{min-width:48px;text-align:center;flex-shrink:0}
+.tc-t{font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:1px;line-height:1}
+.tc-z{font-size:9px;color:var(--gray);text-transform:uppercase}
+
+.score-box{background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;min-width:50px;text-align:center;flex-shrink:0;line-height:1}
+.score-box.ls{background:rgba(231,76,60,.15);border-color:rgba(231,76,60,.4);color:#ff6b6b}
+.score-box.fs{color:var(--gray-l)}
+
+.teams{flex:1;min-width:0}
+.t-main{font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.vs{color:var(--gray);font-weight:300;font-size:10px;flex-shrink:0}
+.t-meta{display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap}
+.tag{font-size:9px;font-weight:600;padding:1px 6px;border-radius:8px;border:1px solid var(--border);color:var(--gray);text-transform:uppercase;letter-spacing:.4px}
+.tag.ko{border-color:var(--gold-d);color:var(--gold-d)}
+.tag.fin{border-color:var(--gold);color:var(--gold)}
+.venue{font-size:10px;color:var(--gray)}
+.scorers{font-size:10px;color:var(--gray-l);margin-top:2px}
+.scorers span{color:var(--gold-d)}
+
+.rc{text-align:right;flex-shrink:0;min-width:55px}
+.cd{font-size:11px;font-weight:600;color:var(--green-b)}
+.live-badge{display:inline-flex;align-items:center;gap:3px;background:var(--red);color:#fff;font-size:9px;font-weight:800;padding:3px 6px;border-radius:4px;letter-spacing:1px}
+.live-badge::before{content:'';width:5px;height:5px;border-radius:50%;background:#fff;animation:blink 1s infinite;flex-shrink:0}
+.ft-t{font-size:10px;color:var(--gray);font-style:italic}
+.expand-hint{font-size:9px;color:var(--red);margin-top:2px;opacity:.8}
+.no-matches{text-align:center;padding:40px;color:var(--gray);font-size:13px}
+
+/* LIVE STATS DROPDOWN */
+.live-stats{
+  display:none;
+  background:var(--card2);border:1px solid rgba(231,76,60,.3);
+  border-top:none;border-radius:0 0 10px 10px;
+  padding:12px;
+  animation:slideDown .2s ease
+}
+.live-stats.open{display:block}
+@keyframes slideDown{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+
+.stats-loading{text-align:center;padding:16px;color:var(--gray);font-size:12px}
+.stats-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:4px 8px;align-items:center}
+.stat-row-label{text-align:center;font-size:9px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;grid-column:2}
+.stat-val-l{text-align:right;font-size:12px;font-weight:600;color:var(--white)}
+.stat-val-r{text-align:left;font-size:12px;font-weight:600;color:var(--white)}
+.stat-bar-wrap{grid-column:1/-1;display:grid;grid-template-columns:1fr auto 1fr;gap:4px;align-items:center;margin-bottom:6px}
+.stat-bar-track{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.stat-bar-fill-l{height:100%;background:var(--blue);border-radius:2px;float:right;transition:width .4s}
+.stat-bar-fill-r{height:100%;background:var(--red);border-radius:2px;transition:width .4s}
+.stat-name-center{text-align:center;font-size:9px;color:var(--gray);font-weight:600;text-transform:uppercase}
+
+.stats-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.stats-team-name{font-size:11px;font-weight:700}
+.stats-team-name.blue{color:var(--blue)}
+.stats-team-name.red-t{color:#ff6b6b}
+.stats-section-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin:10px 0 6px;border-bottom:1px solid var(--border);padding-bottom:3px}
+
+.events-list{display:flex;flex-direction:column;gap:4px}
+.event-row{display:flex;align-items:center;gap:6px;font-size:11px}
+.event-row.t2{flex-direction:row-reverse;text-align:right}
+.event-min{font-family:'Bebas Neue',sans-serif;font-size:12px;color:var(--gold);min-width:28px;flex-shrink:0}
+.event-icon{font-size:13px;flex-shrink:0}
+.event-name{color:var(--white);font-weight:500}
+.event-type{font-size:9px;color:var(--gray)}
+.no-events{font-size:11px;color:var(--gray);text-align:center;padding:8px 0}
+
+/* GROUPS TABLE */
+.groups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.group-card{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.group-title{background:linear-gradient(90deg,rgba(240,192,64,.15),transparent);padding:7px 12px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--gold);border-bottom:1px solid var(--border)}
+.gt{width:100%;border-collapse:collapse;font-size:11px}
+.gt th{padding:5px 8px;color:var(--gray);font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:.5px;text-align:center;border-bottom:1px solid var(--border)}
+.gt th:first-child{text-align:left}
+.gt td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.04);text-align:center;color:var(--gray-l)}
+.gt td:first-child{text-align:left;color:var(--white);font-weight:500}
+.gt tr:last-child td{border-bottom:none}
+.gt tr.q2 td:first-child{border-left:2px solid var(--green-b)}
+.gt tr.q3 td:first-child{border-left:2px solid var(--blue)}
+.pts{font-weight:700;color:var(--gold)}
+.gd-pos{color:var(--green-b)}
+.gd-neg{color:var(--red)}
+
+/* ═══════════════════════════════════════
+   BRACKET — mirrored, final in center
+   ═══════════════════════════════════════ */
+.bracket-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:10px}
+.bracket-hint{font-size:10px;color:var(--gray);text-align:center;margin-bottom:8px}
+
+.bracket-outer{
+  display:grid;
+  /* left half + final col + right half */
+  grid-template-columns: repeat(4,minmax(120px,1fr)) 150px repeat(4,minmax(120px,1fr));
+  gap:0;
+  min-width:1100px;
+  padding:10px 0;
+  position:relative;
+}
+
+/* Round column */
+.br-col{
+  display:flex;flex-direction:column;
+  justify-content:space-around;
+  padding:0 3px;
+  position:relative;
+}
+.br-col-label{
+  font-family:'Bebas Neue',sans-serif;font-size:10px;letter-spacing:1.5px;
+  color:var(--gold);text-align:center;padding-bottom:6px;
+  text-transform:uppercase;white-space:nowrap
+}
+
+/* Final center column */
+.br-final-col{
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:0 8px;gap:8px;
+  border-left:1px solid var(--border);
+  border-right:1px solid var(--border);
+}
+.br-trophy{font-size:32px}
+.br-final-label{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:3px;color:var(--gold)}
+
+/* Match block */
+.bm{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:7px;overflow:hidden;flex-shrink:0;
+  margin:2px 0;position:relative;
+}
+.bm-t{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:5px 7px;font-size:10px;font-weight:500;
+  border-bottom:1px solid var(--border);gap:3px;min-height:26px;
+}
+.bm-t:last-child{border-bottom:none}
+.bm-t.won{color:var(--gold);font-weight:700}
+.bm-t.lost{color:var(--gray);text-decoration:line-through}
+.bm-tbd{color:var(--gray);font-style:italic;font-size:9px}
+.bm-sc{font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--gold);flex-shrink:0;min-width:14px;text-align:right}
+.bm-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+
+/* Connector lines between rounds */
+/* Right-side connectors: lines go left→right out of match, merge, continue */
+/* Left-side connectors: mirror */
+.br-col.left-side .bm{margin-right:0}
+.br-col.right-side .bm{margin-left:0}
+
+/* bracket vertical connectors — drawn via box-shadow on spacer divs */
+.br-spacer{flex:1;position:relative}
+.br-spacer::after{content:'';position:absolute;top:50%;left:50%;width:1px;bottom:0;background:var(--border)}
+
+@media(max-width:500px){.groups-grid{grid-template-columns:1fr}main{padding:10px 10px 80px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="h-row1">
+    <div>
+      <div class="logo">⚽ World Cup <span>2026</span></div>
+      <div class="logo-sub">Live · Kyiv time (EEST UTC+3)</div>
+    </div>
+    <div class="clock">
+      <div class="clock-t" id="ct">--:--</div>
+      <div class="clock-d" id="cd2">--</div>
+    </div>
+  </div>
+  <div class="status-bar">
+    <div class="sdot loading" id="sdot"></div>
+    <span class="stxt" id="stxt">Connecting...</span>
+    <span class="lfetch" id="lfetch"></span>
+    <button class="btn-r" id="btn-r" onclick="fetchData()">↻</button>
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('schedule',this)">📅 Schedule</button>
+    <button class="nav-tab" onclick="switchTab('groups',this)">📊 Groups</button>
+    <button class="nav-tab" onclick="switchTab('bracket',this)">🏆 Bracket</button>
+  </div>
+  <div id="sched-filters" class="filters">
+    <button class="fb active" data-f="all">All</button>
+    <button class="fb" data-f="upcoming">Upcoming</button>
+    <button class="fb" data-f="today">Today</button>
+    <button class="fb" data-f="group">Groups</button>
+    <button class="fb" data-f="knockout">Knockout</button>
+    <div class="search-wrap">
+      <span class="si">🔍</span>
+      <input type="text" class="search-input" id="search" placeholder="Team...">
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- SCHEDULE TAB -->
+  <div class="tab-panel active" id="tab-schedule">
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-n">104</div><div class="stat-l">Matches</div></div>
+      <div class="stat"><div class="stat-n">48</div><div class="stat-l">Teams</div></div>
+      <div class="stat"><div class="stat-n" id="sdays">--</div><div class="stat-l">Days Left</div></div>
+      <div class="stat"><div class="stat-n" id="sleft">--</div><div class="stat-l">Left</div></div>
+      <div class="stat"><div class="stat-n" id="stoday">--</div><div class="stat-l">Today</div></div>
+      <div class="stat"><div class="stat-n" id="sdone">--</div><div class="stat-l">Done</div></div>
+    </div>
+    <div id="container"></div>
+  </div>
+
+  <!-- GROUPS TAB -->
+  <div class="tab-panel" id="tab-groups">
+    <div id="groups-container"></div>
+  </div>
+
+  <!-- BRACKET TAB -->
+  <div class="tab-panel" id="tab-bracket">
+    <p class="bracket-hint">← Scroll left/right · Final in center · Updates live from feed</p>
+    <div class="bracket-scroll">
+      <div class="bracket-outer" id="bracket-container"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ═══════════════════════════════════════════
+// CONSTANTS & CONFIG
+// ═══════════════════════════════════════════
+const KYIV=3*60;
+// jsDelivr = GitHub CDN mirror, sends Access-Control-Allow-Origin:* → works on iOS file:// origin
+// allorigins + corsproxy = CORS proxies as fallbacks
+const FEEDS=[
+  'https://cdn.jsdelivr.net/gh/openfootball/worldcup.json@master/2026/worldcup.json',
+  'https://api.allorigins.win/raw?url=https%3A%2F%2Fraw.githubusercontent.com%2Fopenfootball%2Fworldcup.json%2Fmaster%2F2026%2Fworldcup.json',
+  'https://corsproxy.io/?url=https%3A%2F%2Fraw.githubusercontent.com%2Fopenfootball%2Fworldcup.json%2Fmaster%2F2026%2Fworldcup.json',
+];
+const GROUP_TEAMS={
+  A:['Mexico','South Africa','South Korea','Czech Republic'],
+  B:['Canada','Bosnia & Herzegovina','Qatar','Switzerland'],
+  C:['Brazil','Morocco','Haiti','Scotland'],
+  D:['USA','Paraguay','Australia','Turkey'],
+  E:['Germany','Curaçao','Ivory Coast','Ecuador'],
+  F:['Netherlands','Japan','Sweden','Tunisia'],
+  G:['Belgium','Egypt','Iran','New Zealand'],
+  H:['Spain','Cape Verde','Saudi Arabia','Uruguay'],
+  I:['France','Senegal','Iraq','Norway'],
+  J:['Argentina','Algeria','Austria','Jordan'],
+  K:['Portugal','DR Congo','Uzbekistan','Colombia'],
+  L:['England','Croatia','Ghana','Panama'],
+};
+// Normalize feed team names to GROUP_TEAMS canonical names
+const TEAM_NORM={'Türkiye':'Turkey','Turkiye':'Turkey','Czechia':'Czech Republic',
+  "Côte d'Ivoire":'Ivory Coast','Bosnia and Herzegovina':'Bosnia & Herzegovina'};
+function normTeam(n){return TEAM_NORM[n]||n;}
+
+// ═══════════════════════════════════════════
+// TIME HELPERS
+// ═══════════════════════════════════════════
+const pad=n=>String(n).padStart(2,'0');
+const nowMs=()=>Date.now();
+const kyivMs=u=>u+KYIV*60000;
+const toKyivTime=u=>{const d=new Date(kyivMs(u));return pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())};
+const toKyivDate=u=>{const d=new Date(kyivMs(u));return`${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`};
+const nowKyivDate=()=>toKyivDate(nowMs());
+
+function fmtDay(ds){
+  const d=new Date(ds+'T12:00:00Z');
+  const D=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return`${D[d.getUTCDay()]}, ${M[d.getUTCMonth()]} ${d.getUTCDate()}`
+}
+function parseUtcMs(ds,ts){
+  const[y,mo,d]=ds.split('-').map(Number);
+  let h=15,mi=0,off=0;
+  const m=ts.match(/(\d+):(\d+)\s*UTC([+-]\d+)?/);
+  if(m){h=+m[1];mi=+m[2];off=m[3]?+m[3]:0}
+  else{const s=ts.match(/(\d+):(\d+)/);if(s){h=+s[1];mi=+s[2]}}
+  return Date.UTC(y,mo-1,d,h-off,mi)
+}
+function countdown(u){
+  const diff=u-nowMs();if(diff<=0)return null;
+  const h=Math.floor(diff/3600000),m=Math.floor((diff%3600000)/60000);
+  if(h>=48)return`in ${Math.floor(h/24)}d`;
+  if(h>0)return`in ${h}h ${m}m`;
+  if(m>0)return`in ${m}m`;
+  return'soon'
+}
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let MATCHES=[];
+let activeFilter='all';
+let searchQ='';
+let openStatsId=null; // which match has live stats open
+
+// ═══════════════════════════════════════════
+// NORMALIZE
+// ═══════════════════════════════════════════
+function normalizeMatch(raw,idx){
+  const ds=raw.date,ts=raw.time||'15:00';
+  const utcMs=parseUtcMs(ds,ts);
+  let score=null,status='upcoming',scorers1=[],scorers2=[];
+  if(raw.score&&raw.score.ft&&raw.score.ft.length===2){
+    score=`${raw.score.ft[0]} - ${raw.score.ft[1]}`;
+    status=nowMs()>utcMs+110*60000?'finished':'live'
+  }
+  const rnd=(raw.round||raw.group||'').toLowerCase();
+  let stageType='group';
+  if(rnd.includes('final')&&!rnd.includes('quarter')&&!rnd.includes('semi')&&!rnd.includes('third'))stageType='final';
+  else if(rnd.includes('quarter')||rnd.includes('semi')||rnd.includes('round of')||rnd.includes('third')||rnd.includes('r32')||rnd.includes('r16'))stageType='knockout';
+  if(raw.goals1)scorers1=raw.goals1.map(g=>`${g.name} ${g.minute}'`);
+  if(raw.goals2)scorers2=raw.goals2.map(g=>`${g.name} ${g.minute}'`);
+  // parse events if available
+  const events=raw.events||[];
+  const t1=normTeam(raw.team1||raw.home||'TBD'),t2=normTeam(raw.team2||raw.away||'TBD');
+  return{id:idx,team1:t1,team2:t2,
+    venue:raw.ground||raw.stadium||raw.venue||'',stage:raw.group||raw.round||'',stageType,
+    utcMs,kyivTime:toKyivTime(utcMs),kyivDate:toKyivDate(utcMs),score,status,scorers1,scorers2,events}
+}
+
+// ═══════════════════════════════════════════
+// FETCH
+// ═══════════════════════════════════════════
+async function fetchData(){
+  const dot=document.getElementById('sdot'),txt=document.getElementById('stxt'),btn=document.getElementById('btn-r');
+  btn.disabled=true;
+
+  // Seed is always loaded first so groups/bracket always have data
+  if(MATCHES.length===0){
+    MATCHES=FALLBACK.map(normalizeMatch);
+    dot.className='sdot loading';txt.textContent='Seed loaded, fetching live...';
+    renderAll();
+  }
+
+  dot.className='sdot loading';txt.textContent='Fetching live data...';
+  let data=null,feed='';
+  for(const url of FEEDS){
+    try{
+      const res=await fetch(url,{cache:'no-store'});
+      if(!res.ok)continue;
+      const json=await res.json();
+      let raw=null;
+      if(Array.isArray(json))raw=json;
+      else if(json.matches)raw=json.matches;
+      else if(json.games)raw=json.games;
+      else if(json.contents){try{const p=JSON.parse(json.contents);raw=p.matches||p;}catch(e){}}
+      if(raw&&raw.length>0){data=raw;feed=url.includes('jsdelivr')?'jsDelivr':url.includes('allorigins')?'allorigins':url.includes('corsproxy')?'corsproxy':'feed';break;}
+    }catch(e){continue;}
+  }
+  if(data){
+    MATCHES=data.map(normalizeMatch);
+    const d=new Date(kyivMs(nowMs()));
+    const ts=pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());
+    const scored=data.filter(m=>m.score).length;
+    dot.className='sdot ok';
+    txt.textContent='Live · '+feed+' · '+scored+' results';
+    document.getElementById('lfetch').textContent=ts+' Kyiv';
+  }else{
+    const scored=MATCHES.filter(m=>m.score).length;
+    dot.className='sdot err';
+    txt.textContent='Network unavailable · seed data · '+scored+' results embedded';
+  }
+  btn.disabled=false;
+  renderAll();
+}
+
+// ═══════════════════════════════════════════
+// LIVE STATS — fetch from Claude API with web_search
+// ═══════════════════════════════════════════
+async function fetchLiveStats(matchId){
+  const m=MATCHES.find(x=>x.id===matchId);
+  if(!m)return;
+  const el=document.getElementById(`stats-${matchId}`);
+  if(!el)return;
+  el.innerHTML='<div class="stats-loading">⚽ Fetching live stats...</div>';
+
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:1000,
+        system:`You are a live football stats assistant for FIFA World Cup 2026.
+Return ONLY valid JSON, no markdown, no extra text.
+Format: {"minute":"45+2","possession":[52,48],"shots":[8,5],"shots_on_target":[3,2],"corners":[4,2],"fouls":[11,8],"yellow_cards":[1,0],"red_cards":[0,0],"passes":[312,280],"pass_accuracy":[87,82],"events":[{"min":"23","team":1,"type":"goal","player":"Son Heung-min"},{"min":"45","team":2,"type":"yellow","player":"Müller"}]}
+team 1 = ${m.team1}, team 2 = ${m.team2}.
+If match not live or data unavailable, return best known stats or estimated zeros.`,
+        tools:[{type:'web_search_20250305',name:'web_search'}],
+        messages:[{role:'user',content:`Get live match stats for FIFA World Cup 2026: ${m.team1} vs ${m.team2}. Search for current score, possession, shots, cards, and key events.`}]
+      })
+    });
+    const data=await resp.json();
+    const textBlocks=data.content.filter(b=>b.type==='text');
+    let statsJson=null;
+    for(const b of textBlocks){
+      try{
+        const clean=b.text.replace(/```json|```/g,'').trim();
+        const parsed=JSON.parse(clean);
+        if(parsed.possession)statsJson=parsed;
+      }catch(e){}
+    }
+    if(statsJson){
+      renderLiveStats(matchId,m,statsJson);
+    }else{
+      el.innerHTML='<div class="stats-loading">Stats not available yet for this match.</div>';
+    }
+  }catch(err){
+    el.innerHTML=`<div class="stats-loading">Could not fetch stats: ${err.message}</div>`;
+  }
+}
+
+function renderLiveStats(id,m,s){
+  const el=document.getElementById(`stats-${id}`);
+  if(!el)return;
+  const icon={goal:'⚽',yellow:'🟨',red:'🟥',sub:'🔄',var:'📺',penalty:'🎯'};
+  function statRow(label,v1,v2,pct=true){
+    const total=v1+v2||1;
+    const p1=pct?Math.round(v1/total*100):null;
+    const p2=pct?Math.round(v2/total*100):null;
+    return`<div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+        <span style="font-size:12px;font-weight:600;color:var(--blue)">${v1}${typeof v1==='number'&&pct?'':''}</span>
+        <span style="font-size:9px;color:var(--gray);text-transform:uppercase;letter-spacing:.5px">${label}</span>
+        <span style="font-size:12px;font-weight:600;color:#ff6b6b">${v2}</span>
+      </div>
+      ${pct?`<div style="display:flex;gap:2px;height:4px">
+        <div style="flex:${p1};background:var(--blue);border-radius:2px 0 0 2px"></div>
+        <div style="flex:${p2};background:#ff6b6b;border-radius:0 2px 2px 0"></div>
+      </div>`:''}
+    </div>`
+  }
+  const eventsHtml=(s.events||[]).length===0
+    ?'<div class="no-events">No events yet</div>'
+    :(s.events||[]).sort((a,b)=>parseInt(a.min)-parseInt(b.min)).map(ev=>{
+      const side=ev.team===1?'':'t2';
+      return`<div class="event-row ${side}">
+        <span class="event-min">${ev.min}'</span>
+        <span class="event-icon">${icon[ev.type]||'•'}</span>
+        <div><div class="event-name">${ev.player||''}</div><div class="event-type">${ev.type}</div></div>
+      </div>`
+    }).join('');
+
+  el.innerHTML=`
+    <div class="stats-header">
+      <span class="stats-team-name blue">${m.team1}</span>
+      <span style="font-size:10px;color:var(--gray)">${s.minute?`${s.minute}'`:''}</span>
+      <span class="stats-team-name red-t">${m.team2}</span>
+    </div>
+    ${statRow('Possession',s.possession[0],s.possession[1])}
+    ${statRow('Shots',s.shots[0],s.shots[1])}
+    ${statRow('On Target',s.shots_on_target[0],s.shots_on_target[1])}
+    ${statRow('Corners',s.corners[0],s.corners[1])}
+    ${statRow('Passes',s.passes[0],s.passes[1])}
+    ${statRow('Pass Acc %',s.pass_accuracy[0],s.pass_accuracy[1])}
+    ${statRow('Fouls',s.fouls[0],s.fouls[1])}
+    ${statRow('Yellow Cards',s.yellow_cards[0],s.yellow_cards[1],false)}
+    ${statRow('Red Cards',s.red_cards[0],s.red_cards[1],false)}
+    <div class="stats-section-title">Match Events</div>
+    <div class="events-list">${eventsHtml}</div>
+    <div style="font-size:9px;color:var(--gray);text-align:center;margin-top:10px">AI-powered · tap card to refresh</div>
+  `;
+}
+
+function toggleStats(id){
+  const m=MATCHES.find(x=>x.id===id);
+  if(!m)return;
+  const isLive=m.status==='live'||(nowMs()>=m.utcMs&&nowMs()<m.utcMs+110*60000);
+  if(!isLive)return;
+  const panel=document.getElementById(`stats-panel-${id}`);
+  if(!panel)return;
+  const isOpen=panel.classList.contains('open');
+  // close all others
+  document.querySelectorAll('.live-stats.open').forEach(p=>{p.classList.remove('open');openStatsId=null});
+  if(!isOpen){
+    panel.classList.add('open');
+    openStatsId=id;
+    fetchLiveStats(id);
+  }
+}
+
+// ═══════════════════════════════════════════
+// RENDER SCHEDULE
+// ═══════════════════════════════════════════
+function renderSchedule(){
+  const now=nowMs(),todayK=nowKyivDate();
+  let list=MATCHES;
+  if(activeFilter==='upcoming')list=list.filter(m=>m.utcMs>now-110*60000&&m.status!=='finished');
+  else if(activeFilter==='today')list=list.filter(m=>m.kyivDate===todayK);
+  else if(activeFilter==='group')list=list.filter(m=>m.stageType==='group');
+  else if(activeFilter==='knockout')list=list.filter(m=>m.stageType==='knockout'||m.stageType==='final');
+  if(searchQ){
+    const q=searchQ.toLowerCase();
+    list=list.filter(m=>m.team1.toLowerCase().includes(q)||m.team2.toLowerCase().includes(q)||m.stage.toLowerCase().includes(q)||m.venue.toLowerCase().includes(q));
+  }
+  const byDay={};
+  list.forEach(m=>{if(!byDay[m.kyivDate])byDay[m.kyivDate]=[];byDay[m.kyivDate].push(m)});
+  const nextM=list.find(m=>m.utcMs>now&&m.status!=='finished');
+  let html=list.length===0?'<div class="no-matches">⚽ No matches found</div>':'';
+
+  Object.keys(byDay).sort().forEach(day=>{
+    const ms=byDay[day];const isT=day===todayK;
+    html+=`<div class="day-group"><div class="day-header">
+      <div class="day-pip"></div>
+      <span class="day-label">${isT?`📅 TODAY · ${fmtDay(day)}`:fmtDay(day)}</span>
+      <div class="day-div"></div><span class="day-cnt">${ms.length}</span>
+    </div>`;
+
+    ms.forEach(m=>{
+      const live=m.status==='live'||(now>=m.utcMs&&now<m.utcMs+110*60000&&!m.score);
+      const finished=m.status==='finished'||now>m.utcMs+110*60000;
+      const isNext=nextM&&m.id===nextM.id;
+      const cd=(!live&&!finished)?countdown(m.utcMs):null;
+      let cls='mc';if(live)cls+=' live';else if(finished)cls+=' finished';else if(isNext)cls+=' next';
+      const scoreHtml=m.score?`<div class="score-box ${live?'ls':finished?'fs':''}">${m.score}</div>`:'';
+      let rHtml='';
+      if(live)rHtml='<div class="live-badge">LIVE</div>';
+      else if(finished)rHtml='<div class="ft-t">FT</div>';
+      else if(cd)rHtml=`<div class="cd">${cd}</div>`;
+      const tagCls=m.stageType==='final'?'fin':m.stageType==='knockout'?'ko':'';
+      let sc='';
+      if((m.scorers1.length||m.scorers2.length)&&m.score){
+        const s1=m.scorers1.map(s=>`<span>${s}</span>`).join(' ');
+        const s2=m.scorers2.map(s=>`<span>${s}</span>`).join(' ');
+        sc=`<div class="scorers">${s1}${s1&&s2?' · ':''}${s2}</div>`
+      }
+      const liveHint=live?`<div class="expand-hint">▼ tap for live stats</div>`:'';
+
+      html+=`<div class="mc-wrap">
+        <div class="${cls}" onclick="toggleStats(${m.id})">
+          <div class="tc"><div class="tc-t">${m.kyivTime}</div><div class="tc-z">Kyiv</div></div>
+          ${scoreHtml}
+          <div class="teams">
+            <div class="t-main"><span>${m.team1}</span><span class="vs">vs</span><span>${m.team2}</span></div>
+            <div class="t-meta">${m.stage?`<span class="tag ${tagCls}">${m.stage}</span>`:''}<span class="venue">${m.venue}</span></div>
+            ${sc}${liveHint}
+          </div>
+          <div class="rc">${rHtml}</div>
+        </div>
+        ${live?`<div class="live-stats" id="stats-panel-${m.id}"><div class="stats-loading" id="stats-${m.id}">Tap to load stats</div></div>`:''}
+      </div>`;
+    });
+    html+='</div>';
+  });
+  document.getElementById('container').innerHTML=html;
+
+  const fin=MATCHES.filter(m=>m.status==='finished'||nowMs()>m.utcMs+110*60000).length;
+  const tC=MATCHES.filter(m=>m.kyivDate===todayK).length;
+  const fMs=MATCHES.length?MATCHES[MATCHES.length-1].utcMs:0;
+  const dL=Math.max(0,Math.ceil((fMs-now)/86400000));
+  document.getElementById('sdays').textContent=dL||'🏆';
+  document.getElementById('sleft').textContent=MATCHES.length-fin;
+  document.getElementById('stoday').textContent=tC;
+  document.getElementById('sdone').textContent=fin;
+}
+
+// ═══════════════════════════════════════════
+// RENDER GROUPS
+// ═══════════════════════════════════════════
+function renderGroups(){
+  const standings={};
+  Object.entries(GROUP_TEAMS).forEach(([g,teams])=>{
+    standings[g]={};
+    teams.forEach(t=>{standings[g][t]={p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0}});
+  });
+  MATCHES.forEach(m=>{
+    if(!m.score)return;
+    if(!m.stage.startsWith('Group '))return;
+    const gk=m.stage.replace('Group ','');
+    if(!standings[gk])return;
+    const[g1,g2]=m.score.split(' - ').map(Number);
+    const find=(g,name)=>{
+      if(standings[g][name])return name;
+      const nl=name.toLowerCase();
+      // try partial word match
+      return Object.keys(standings[g]).find(k=>nl.includes(k.toLowerCase().split(' ')[0])||k.toLowerCase().includes(nl.split(' ')[0]))||name;
+    };
+    const k1=find(gk,m.team1),k2=find(gk,m.team2);
+    if(!standings[gk][k1]||!standings[gk][k2])return;
+    const s1=standings[gk][k1],s2=standings[gk][k2];
+    s1.p++;s2.p++;s1.gf+=g1;s1.ga+=g2;s2.gf+=g2;s2.ga+=g1;
+    if(g1>g2){s1.w++;s1.pts+=3;s2.l++}
+    else if(g1<g2){s2.w++;s2.pts+=3;s1.l++}
+    else{s1.d++;s2.d++;s1.pts++;s2.pts++}
+  });
+  let html='<div class="groups-grid">';
+  Object.entries(standings).forEach(([grp,teams])=>{
+    const sorted=Object.entries(teams)
+      .map(([name,s])=>({name,...s,gd:s.gf-s.ga}))
+      .sort((a,b)=>b.pts-a.pts||(b.gd-a.gd)||(b.gf-a.gf));
+    html+=`<div class="group-card"><div class="group-title">Group ${grp}</div>
+    <table class="gt"><thead><tr><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th></tr></thead><tbody>`;
+    sorted.forEach((t,i)=>{
+      const cls=i<2?'q2':i===2?'q3':'';
+      const gd=t.gd>0?`<span class="gd-pos">+${t.gd}</span>`:t.gd<0?`<span class="gd-neg">${t.gd}</span>`:0;
+      html+=`<tr class="${cls}"><td>${t.name}</td><td>${t.p}</td><td>${t.w}</td><td>${t.d}</td><td>${t.l}</td><td>${t.gf}</td><td>${t.ga}</td><td>${gd}</td><td class="pts">${t.pts}</td></tr>`;
+    });
+    html+='</tbody></table></div>';
+  });
+  html+='</div>';
+  document.getElementById('groups-container').innerHTML=html;
+}
+
+// ═══════════════════════════════════════════
+// RENDER BRACKET — mirrored, Final in center
+// ═══════════════════════════════════════════
+function renderBracket(){
+  const r32=MATCHES.filter(m=>(m.stage||'').toLowerCase().includes('32'));
+  const r16=MATCHES.filter(m=>(m.stage||'').toLowerCase().includes('16'));
+  const qf=MATCHES.filter(m=>(m.stage||'').toLowerCase().includes('quarter'));
+  const sf=MATCHES.filter(m=>(m.stage||'').toLowerCase().includes('semi'));
+  const fin=MATCHES.filter(m=>m.stageType==='final');
+  const tp=MATCHES.filter(m=>(m.stage||'').toLowerCase().includes('third'));
+
+  // Build match card HTML
+  function bm(m){
+    if(!m)return'<div class="bm"><div class="bm-t"><span class="bm-tbd">TBD</span></div><div class="bm-t"><span class="bm-tbd">TBD</span></div></div>';
+    const[s1,s2]=m.score?m.score.split(' - ').map(Number):[null,null];
+    const hs=m.score!==null;
+    const w1=hs&&s1>s2,w2=hs&&s2>s1;
+    const cls1=hs?(w1?'won':w2?'lost':''):'';
+    const cls2=hs?(w2?'won':w1?'lost':''):'';
+    const n1=m.team1==='TBD'?'<span class="bm-tbd">TBD</span>':m.team1;
+    const n2=m.team2==='TBD'?'<span class="bm-tbd">TBD</span>':m.team2;
+    const sc1=hs?`<span class="bm-sc">${s1}</span>`:`<span style="font-size:9px;color:var(--gray)">${m.kyivTime}</span>`;
+    const sc2=hs?`<span class="bm-sc">${s2}</span>`:'';
+    return`<div class="bm">
+      <div class="bm-t ${cls1}"><span class="bm-name">${n1}</span>${sc1}</div>
+      <div class="bm-t ${cls2}"><span class="bm-name">${n2}</span>${sc2}</div>
+    </div>`;
+  }
+
+  // Build a round column with N slots (half = left side, half = right side)
+  function col(matches,count,label,side){
+    const slots=[];
+    for(let i=0;i<count;i++)slots.push(matches[i]||null);
+    const items=slots.map(m=>`<div style="flex:1;display:flex;align-items:center">${bm(m)}</div>`).join('');
+    return`<div class="br-col ${side}">
+      <div class="br-col-label">${label}</div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:4px">${items}</div>
+    </div>`
+  }
+
+  // Split matches: left gets first half indices, right gets second half
+  const r32L=r32.slice(0,8),r32R=r32.slice(8,16);
+  const r16L=r16.slice(0,4),r16R=r16.slice(4,8);
+  const qfL=qf.slice(0,2),qfR=qf.slice(2,4);
+  const sfL=sf.slice(0,1),sfR=sf.slice(1,2);
+  const finalM=fin[0]||null;
+
+  const html=
+    col(r32L,8,'Round of 32','left-side')+
+    col(r16L,4,'Round of 16','left-side')+
+    col(qfL,2,'Quarters','left-side')+
+    col(sfL,1,'Semis','left-side')+
+    `<div class="br-final-col">
+      <div class="br-trophy">🏆</div>
+      <div class="br-final-label">Final</div>
+      ${bm(finalM)}
+      ${tp[0]?`<div style="font-size:9px;color:var(--gray);margin-top:6px">3rd Place</div>${bm(tp[0])}`:``}
+    </div>`+
+    col(sfR,1,'Semis','right-side')+
+    col(qfR,2,'Quarters','right-side')+
+    col(r16R,4,'Round of 16','right-side')+
+    col(r32R,8,'Round of 32','right-side');
+
+  document.getElementById('bracket-container').innerHTML=html;
+}
+
+// ═══════════════════════════════════════════
+// TAB SWITCH
+// ═══════════════════════════════════════════
+function switchTab(tab,btn){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  btn.classList.add('active');
+  document.getElementById('sched-filters').style.display=tab==='schedule'?'flex':'none';
+}
+
+// ═══════════════════════════════════════════
+// CLOCK
+// ═══════════════════════════════════════════
+function updateClock(){
+  const d=new Date(kyivMs(nowMs()));
+  document.getElementById('ct').textContent=`${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+  const D=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('cd2').textContent=`${D[d.getUTCDay()]} ${d.getUTCDate()} ${M[d.getUTCMonth()]}`;
+}
+
+function renderAll(){renderSchedule();renderGroups();renderBracket()}
+
+// ═══════════════════════════════════════════
+// EVENTS
+// ═══════════════════════════════════════════
+document.querySelectorAll('.fb').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.fb').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');activeFilter=b.dataset.f;renderSchedule();
+}));
+document.getElementById('search').addEventListener('input',e=>{searchQ=e.target.value.trim();renderSchedule()});
+
+// ═══════════════════════════════════════════
+// SEED DATA — embedded live feed snapshot
+// App works offline/iOS with this; live fetch updates on top
+// ═══════════════════════════════════════════
+const SEED_JSON={"name":"World Cup 2026","matches":[{"round":"Matchday 1","date":"2026-06-11","time":"13:00 UTC-6","team1":"Mexico","team2":"South Africa","score":{"ft":[2,0],"ht":[1,0]},"goals1":[{"name":"Julián Quiñones","minute":"9"},{"name":"Raúl Jiménez","minute":"67"}],"goals2":[],"group":"Group A","ground":"Mexico City"},{"round":"Matchday 1","date":"2026-06-11","time":"20:00 UTC-6","team1":"South Korea","team2":"Czech Republic","score":{"ft":[2,1],"ht":[0,0]},"goals1":[{"name":"Hwang In-Beom","minute":"67"},{"name":"Oh Hyeon-Gyu","minute":"80"}],"goals2":[{"name":"Ladislav Krejcí","minute":"59"}],"group":"Group A","ground":"Guadalajara (Zapopan)"},{"round":"Matchday 8","date":"2026-06-18","time":"12:00 UTC-4","team1":"Czech Republic","team2":"South Africa","group":"Group A","ground":"Atlanta"},{"round":"Matchday 8","date":"2026-06-18","time":"19:00 UTC-6","team1":"Mexico","team2":"South Korea","group":"Group A","ground":"Guadalajara (Zapopan)"},{"round":"Matchday 14","date":"2026-06-24","time":"19:00 UTC-6","team1":"Czech Republic","team2":"Mexico","group":"Group A","ground":"Mexico City"},{"round":"Matchday 14","date":"2026-06-24","time":"19:00 UTC-6","team1":"South Africa","team2":"South Korea","group":"Group A","ground":"Monterrey (Guadalupe)"},{"round":"Matchday 2","date":"2026-06-12","time":"15:00 UTC-4","team1":"Canada","team2":"Bosnia & Herzegovina","group":"Group B","ground":"Toronto"},{"round":"Matchday 3","date":"2026-06-13","time":"12:00 UTC-7","team1":"Qatar","team2":"Switzerland","group":"Group B","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 8","date":"2026-06-18","time":"12:00 UTC-7","team1":"Switzerland","team2":"Bosnia & Herzegovina","group":"Group B","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 8","date":"2026-06-18","time":"15:00 UTC-7","team1":"Canada","team2":"Qatar","group":"Group B","ground":"Vancouver"},{"round":"Matchday 14","date":"2026-06-24","time":"12:00 UTC-7","team1":"Switzerland","team2":"Canada","group":"Group B","ground":"Vancouver"},{"round":"Matchday 14","date":"2026-06-24","time":"12:00 UTC-7","team1":"Bosnia & Herzegovina","team2":"Qatar","group":"Group B","ground":"Seattle"},{"round":"Matchday 3","date":"2026-06-13","time":"18:00 UTC-4","team1":"Brazil","team2":"Morocco","group":"Group C","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 3","date":"2026-06-13","time":"21:00 UTC-4","team1":"Haiti","team2":"Scotland","group":"Group C","ground":"Boston (Foxborough)"},{"round":"Matchday 9","date":"2026-06-19","time":"18:00 UTC-4","team1":"Scotland","team2":"Morocco","group":"Group C","ground":"Boston (Foxborough)"},{"round":"Matchday 9","date":"2026-06-19","time":"20:30 UTC-4","team1":"Brazil","team2":"Haiti","group":"Group C","ground":"Philadelphia"},{"round":"Matchday 14","date":"2026-06-24","time":"18:00 UTC-4","team1":"Scotland","team2":"Brazil","group":"Group C","ground":"Miami (Miami Gardens)"},{"round":"Matchday 14","date":"2026-06-24","time":"18:00 UTC-4","team1":"Morocco","team2":"Haiti","group":"Group C","ground":"Atlanta"},{"round":"Matchday 2","date":"2026-06-12","time":"18:00 UTC-7","team1":"USA","team2":"Paraguay","group":"Group D","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 3","date":"2026-06-13","time":"21:00 UTC-7","team1":"Australia","team2":"Turkey","group":"Group D","ground":"Vancouver"},{"round":"Matchday 9","date":"2026-06-19","time":"12:00 UTC-7","team1":"USA","team2":"Australia","group":"Group D","ground":"Seattle"},{"round":"Matchday 9","date":"2026-06-19","time":"20:00 UTC-7","team1":"Turkey","team2":"Paraguay","group":"Group D","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 15","date":"2026-06-25","time":"19:00 UTC-7","team1":"Turkey","team2":"USA","group":"Group D","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 15","date":"2026-06-25","time":"19:00 UTC-7","team1":"Paraguay","team2":"Australia","group":"Group D","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 4","date":"2026-06-14","time":"12:00 UTC-5","team1":"Germany","team2":"Curaçao","group":"Group E","ground":"Houston"},{"round":"Matchday 4","date":"2026-06-14","time":"19:00 UTC-4","team1":"Ivory Coast","team2":"Ecuador","group":"Group E","ground":"Philadelphia"},{"round":"Matchday 10","date":"2026-06-20","time":"16:00 UTC-4","team1":"Germany","team2":"Ivory Coast","group":"Group E","ground":"Toronto"},{"round":"Matchday 10","date":"2026-06-20","time":"19:00 UTC-5","team1":"Ecuador","team2":"Curaçao","group":"Group E","ground":"Kansas City"},{"round":"Matchday 15","date":"2026-06-25","time":"16:00 UTC-4","team1":"Curaçao","team2":"Ivory Coast","group":"Group E","ground":"Philadelphia"},{"round":"Matchday 15","date":"2026-06-25","time":"16:00 UTC-4","team1":"Ecuador","team2":"Germany","group":"Group E","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 4","date":"2026-06-14","time":"15:00 UTC-5","team1":"Netherlands","team2":"Japan","group":"Group F","ground":"Dallas (Arlington)"},{"round":"Matchday 4","date":"2026-06-14","time":"20:00 UTC-6","team1":"Sweden","team2":"Tunisia","group":"Group F","ground":"Monterrey (Guadalupe)"},{"round":"Matchday 10","date":"2026-06-20","time":"12:00 UTC-5","team1":"Netherlands","team2":"Sweden","group":"Group F","ground":"Houston"},{"round":"Matchday 10","date":"2026-06-20","time":"22:00 UTC-6","team1":"Tunisia","team2":"Japan","group":"Group F","ground":"Monterrey (Guadalupe)"},{"round":"Matchday 15","date":"2026-06-25","time":"18:00 UTC-5","team1":"Japan","team2":"Sweden","group":"Group F","ground":"Dallas (Arlington)"},{"round":"Matchday 15","date":"2026-06-25","time":"18:00 UTC-5","team1":"Tunisia","team2":"Netherlands","group":"Group F","ground":"Kansas City"},{"round":"Matchday 5","date":"2026-06-15","time":"12:00 UTC-7","team1":"Belgium","team2":"Egypt","group":"Group G","ground":"Seattle"},{"round":"Matchday 5","date":"2026-06-15","time":"18:00 UTC-7","team1":"Iran","team2":"New Zealand","group":"Group G","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 11","date":"2026-06-21","time":"12:00 UTC-7","team1":"Belgium","team2":"Iran","group":"Group G","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 11","date":"2026-06-21","time":"18:00 UTC-7","team1":"New Zealand","team2":"Egypt","group":"Group G","ground":"Vancouver"},{"round":"Matchday 16","date":"2026-06-26","time":"20:00 UTC-7","team1":"Egypt","team2":"Iran","group":"Group G","ground":"Seattle"},{"round":"Matchday 16","date":"2026-06-26","time":"20:00 UTC-7","team1":"New Zealand","team2":"Belgium","group":"Group G","ground":"Vancouver"},{"round":"Matchday 5","date":"2026-06-15","time":"12:00 UTC-4","team1":"Spain","team2":"Cape Verde","group":"Group H","ground":"Atlanta"},{"round":"Matchday 5","date":"2026-06-15","time":"18:00 UTC-4","team1":"Saudi Arabia","team2":"Uruguay","group":"Group H","ground":"Miami (Miami Gardens)"},{"round":"Matchday 11","date":"2026-06-21","time":"12:00 UTC-4","team1":"Spain","team2":"Saudi Arabia","group":"Group H","ground":"Atlanta"},{"round":"Matchday 11","date":"2026-06-21","time":"18:00 UTC-4","team1":"Uruguay","team2":"Cape Verde","group":"Group H","ground":"Miami (Miami Gardens)"},{"round":"Matchday 16","date":"2026-06-26","time":"19:00 UTC-5","team1":"Cape Verde","team2":"Saudi Arabia","group":"Group H","ground":"Houston"},{"round":"Matchday 16","date":"2026-06-26","time":"18:00 UTC-6","team1":"Uruguay","team2":"Spain","group":"Group H","ground":"Guadalajara (Zapopan)"},{"round":"Matchday 6","date":"2026-06-16","time":"15:00 UTC-4","team1":"France","team2":"Senegal","group":"Group I","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 6","date":"2026-06-16","time":"18:00 UTC-4","team1":"Iraq","team2":"Norway","group":"Group I","ground":"Boston (Foxborough)"},{"round":"Matchday 12","date":"2026-06-22","time":"17:00 UTC-4","team1":"France","team2":"Iraq","group":"Group I","ground":"Philadelphia"},{"round":"Matchday 12","date":"2026-06-22","time":"20:00 UTC-4","team1":"Norway","team2":"Senegal","group":"Group I","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 16","date":"2026-06-26","time":"15:00 UTC-4","team1":"Norway","team2":"France","group":"Group I","ground":"Boston (Foxborough)"},{"round":"Matchday 16","date":"2026-06-26","time":"15:00 UTC-4","team1":"Senegal","team2":"Iraq","group":"Group I","ground":"Toronto"},{"round":"Matchday 6","date":"2026-06-16","time":"20:00 UTC-5","team1":"Argentina","team2":"Algeria","group":"Group J","ground":"Kansas City"},{"round":"Matchday 6","date":"2026-06-16","time":"21:00 UTC-7","team1":"Austria","team2":"Jordan","group":"Group J","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 12","date":"2026-06-22","time":"12:00 UTC-5","team1":"Argentina","team2":"Austria","group":"Group J","ground":"Dallas (Arlington)"},{"round":"Matchday 12","date":"2026-06-22","time":"20:00 UTC-7","team1":"Jordan","team2":"Algeria","group":"Group J","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 17","date":"2026-06-27","time":"21:00 UTC-5","team1":"Algeria","team2":"Austria","group":"Group J","ground":"Kansas City"},{"round":"Matchday 17","date":"2026-06-27","time":"21:00 UTC-5","team1":"Jordan","team2":"Argentina","group":"Group J","ground":"Dallas (Arlington)"},{"round":"Matchday 7","date":"2026-06-17","time":"12:00 UTC-5","team1":"Portugal","team2":"DR Congo","group":"Group K","ground":"Houston"},{"round":"Matchday 7","date":"2026-06-17","time":"20:00 UTC-6","team1":"Uzbekistan","team2":"Colombia","group":"Group K","ground":"Mexico City"},{"round":"Matchday 13","date":"2026-06-23","time":"12:00 UTC-5","team1":"Portugal","team2":"Uzbekistan","group":"Group K","ground":"Houston"},{"round":"Matchday 13","date":"2026-06-23","time":"20:00 UTC-6","team1":"Colombia","team2":"DR Congo","group":"Group K","ground":"Guadalajara (Zapopan)"},{"round":"Matchday 17","date":"2026-06-27","time":"19:30 UTC-4","team1":"Colombia","team2":"Portugal","group":"Group K","ground":"Miami (Miami Gardens)"},{"round":"Matchday 17","date":"2026-06-27","time":"19:30 UTC-4","team1":"DR Congo","team2":"Uzbekistan","group":"Group K","ground":"Atlanta"},{"round":"Matchday 7","date":"2026-06-17","time":"15:00 UTC-5","team1":"England","team2":"Croatia","group":"Group L","ground":"Dallas (Arlington)"},{"round":"Matchday 7","date":"2026-06-17","time":"19:00 UTC-4","team1":"Ghana","team2":"Panama","group":"Group L","ground":"Toronto"},{"round":"Matchday 13","date":"2026-06-23","time":"16:00 UTC-4","team1":"England","team2":"Ghana","group":"Group L","ground":"Boston (Foxborough)"},{"round":"Matchday 13","date":"2026-06-23","time":"19:00 UTC-4","team1":"Panama","team2":"Croatia","group":"Group L","ground":"Toronto"},{"round":"Matchday 17","date":"2026-06-27","time":"17:00 UTC-4","team1":"Panama","team2":"England","group":"Group L","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 17","date":"2026-06-27","time":"17:00 UTC-4","team1":"Croatia","team2":"Ghana","group":"Group L","ground":"Philadelphia"},{"round":"Round of 32","num":73,"date":"2026-06-28","time":"12:00 UTC-7","team1":"2A","team2":"2B","ground":"Los Angeles (Inglewood)"},{"round":"Round of 32","num":74,"date":"2026-06-29","time":"16:30 UTC-4","team1":"1E","team2":"3A/B/C/D/F","ground":"Boston (Foxborough)"},{"round":"Round of 32","num":75,"date":"2026-06-29","time":"19:00 UTC-6","team1":"1F","team2":"2C","ground":"Monterrey (Guadalupe)"},{"round":"Round of 32","num":76,"date":"2026-06-29","time":"12:00 UTC-5","team1":"1C","team2":"2F","ground":"Houston"},{"round":"Round of 32","num":77,"date":"2026-06-30","time":"17:00 UTC-4","team1":"1I","team2":"3C/D/F/G/H","ground":"New York/New Jersey (East Rutherford)"},{"round":"Round of 32","num":78,"date":"2026-06-30","time":"12:00 UTC-5","team1":"2E","team2":"2I","ground":"Dallas (Arlington)"},{"round":"Round of 32","num":79,"date":"2026-06-30","time":"19:00 UTC-6","team1":"1A","team2":"3C/E/F/H/I","ground":"Mexico City"},{"round":"Round of 32","num":80,"date":"2026-07-01","time":"12:00 UTC-4","team1":"1L","team2":"3E/H/I/J/K","ground":"Atlanta"},{"round":"Round of 32","num":81,"date":"2026-07-01","time":"17:00 UTC-7","team1":"1D","team2":"3B/E/F/I/J","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Round of 32","num":82,"date":"2026-07-01","time":"13:00 UTC-7","team1":"1G","team2":"3A/E/H/I/J","ground":"Seattle"},{"round":"Round of 32","num":83,"date":"2026-07-02","time":"19:00 UTC-4","team1":"2K","team2":"2L","ground":"Toronto"},{"round":"Round of 32","num":84,"date":"2026-07-02","time":"12:00 UTC-7","team1":"1H","team2":"2J","ground":"Los Angeles (Inglewood)"},{"round":"Round of 32","num":85,"date":"2026-07-02","time":"20:00 UTC-7","team1":"1B","team2":"3E/F/G/I/J","ground":"Vancouver"},{"round":"Round of 32","num":86,"date":"2026-07-03","time":"18:00 UTC-4","team1":"1J","team2":"2H","ground":"Miami (Miami Gardens)"},{"round":"Round of 32","num":87,"date":"2026-07-03","time":"20:30 UTC-5","team1":"1K","team2":"3D/E/I/J/L","ground":"Kansas City"},{"round":"Round of 32","num":88,"date":"2026-07-03","time":"13:00 UTC-5","team1":"2D","team2":"2G","ground":"Dallas (Arlington)"},{"round":"Round of 16","num":89,"date":"2026-07-04","time":"17:00 UTC-4","team1":"W74","team2":"W77","ground":"Philadelphia"},{"round":"Round of 16","num":90,"date":"2026-07-04","time":"12:00 UTC-5","team1":"W73","team2":"W75","ground":"Houston"},{"round":"Round of 16","num":91,"date":"2026-07-05","time":"16:00 UTC-4","team1":"W76","team2":"W78","ground":"New York/New Jersey (East Rutherford)"},{"round":"Round of 16","num":92,"date":"2026-07-05","time":"18:00 UTC-6","team1":"W79","team2":"W80","ground":"Mexico City"},{"round":"Round of 16","num":93,"date":"2026-07-06","time":"14:00 UTC-5","team1":"W83","team2":"W84","ground":"Dallas (Arlington)"},{"round":"Round of 16","num":94,"date":"2026-07-06","time":"17:00 UTC-7","team1":"W81","team2":"W82","ground":"Seattle"},{"round":"Round of 16","num":95,"date":"2026-07-07","time":"12:00 UTC-4","team1":"W86","team2":"W88","ground":"Atlanta"},{"round":"Round of 16","num":96,"date":"2026-07-07","time":"13:00 UTC-7","team1":"W85","team2":"W87","ground":"Vancouver"},{"round":"Quarter-final","num":97,"date":"2026-07-09","time":"16:00 UTC-4","team1":"W89","team2":"W90","ground":"Boston (Foxborough)"},{"round":"Quarter-final","num":98,"date":"2026-07-10","time":"12:00 UTC-7","team1":"W93","team2":"W94","ground":"Los Angeles (Inglewood)"},{"round":"Quarter-final","num":99,"date":"2026-07-11","time":"17:00 UTC-4","team1":"W91","team2":"W92","ground":"Miami (Miami Gardens)"},{"round":"Quarter-final","num":100,"date":"2026-07-11","time":"20:00 UTC-5","team1":"W95","team2":"W96","ground":"Kansas City"},{"round":"Semi-final","num":101,"date":"2026-07-14","time":"14:00 UTC-5","team1":"W97","team2":"W98","ground":"Dallas (Arlington)"},{"round":"Semi-final","num":102,"date":"2026-07-15","time":"15:00 UTC-4","team1":"W99","team2":"W100","ground":"Atlanta"},{"round":"Match for third place","num":103,"date":"2026-07-18","time":"17:00 UTC-4","team1":"L101","team2":"L102","ground":"Miami (Miami Gardens)"},{"round":"Final","num":104,"date":"2026-07-19","time":"15:00 UTC-4","team1":"W101","team2":"W102","ground":"New York/New Jersey (East Rutherford)"}]};
+const FALLBACK=SEED_JSON.matches||SEED_JSON;
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+updateClock();
+setInterval(updateClock,1000);
+setInterval(()=>{renderSchedule();renderGroups();renderBracket();},30000);
+setInterval(fetchData,3*60*1000);
+fetchData();
+
+// ═══════════════════════════════════════════
+// PWA — Service Worker + Install Prompt
+// ═══════════════════════════════════════════
+let deferredInstallPrompt = null;
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', async ()=>{
+    try{
+      const reg = await navigator.serviceWorker.register('./sw.js', {scope:'./'});
+      console.log('SW registered:', reg.scope);
+      
+      // Schedule background sync for match reminders every 30 min
+      if('periodicSync' in reg){
+        try{
+          await reg.periodicSync.register('check-matches',{minInterval: 30*60*1000});
+        }catch(e){}
+      }
+      
+      // Request notification permission
+      if('Notification' in window && Notification.permission === 'default'){
+        setTimeout(async ()=>{
+          const perm = await Notification.requestPermission();
+          if(perm === 'granted') showInstallBanner('🔔 Notifications enabled! You will be alerted 30 min before each match.');
+        }, 4000);
+      }
+    }catch(e){ console.warn('SW registration failed:', e); }
+  });
+}
+
+// Install banner (Android Chrome shows "Add to Home Screen" prompt)
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showInstallBanner('📲 Install as app for offline access & match alerts');
+});
+
+window.addEventListener('appinstalled', ()=>{
+  hideInstallBanner();
+  deferredInstallPrompt = null;
+});
+
+function showInstallBanner(msg){
+  if(document.getElementById('pwa-banner')) return;
+  const b = document.createElement('div');
+  b.id = 'pwa-banner';
+  b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#1a2230;border-top:1px solid #f0c040;padding:10px 16px;display:flex;align-items:center;gap:10px;font-family:-apple-system,sans-serif;font-size:12px;color:#f0f2f5;';
+  b.innerHTML = '<span style="flex:1">'+msg+'</span>'
+    + (deferredInstallPrompt ? '<button onclick="installPWA()" style="background:#f0c040;color:#000;border:none;border-radius:6px;padding:6px 14px;font-weight:700;font-size:12px;cursor:pointer">Install</button>' : '')
+    + '<button onclick="hideInstallBanner()" style="background:none;border:none;color:#7a8694;font-size:18px;cursor:pointer;padding:0 4px">✕</button>';
+  document.body.appendChild(b);
+  // iOS: show manual instructions
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  if(isIOS && !navigator.standalone){
+    b.querySelector('span').innerHTML = '📲 Tap <strong style="color:#f0c040">Share ↑</strong> then <strong style="color:#f0c040">Add to Home Screen</strong> to install';
+  }
+}
+
+function hideInstallBanner(){
+  const b = document.getElementById('pwa-banner');
+  if(b) b.remove();
+}
+
+async function installPWA(){
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const {outcome} = await deferredInstallPrompt.userChoice;
+  if(outcome === 'accepted') hideInstallBanner();
+  deferredInstallPrompt = null;
+}
+
+// Show iOS install hint after 3 seconds if not already installed
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+if(isIOS && !isStandalone){
+  setTimeout(()=> showInstallBanner('install'), 3000);
+}
+</script>
+</body>
+</html>
