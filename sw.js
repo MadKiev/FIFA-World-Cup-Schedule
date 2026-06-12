@@ -1,7 +1,7 @@
 // ⚽ World Cup 2026 PWA — Service Worker
-const CACHE = 'wc2026-v1';
+const CACHE = 'wc2026-v7';
 const SHELL = [
-  './index.html',
+  // Do NOT cache index.html — always fetch fresh
   './manifest.json',
   './icon.svg',
   './icon-192.png',
@@ -16,6 +16,10 @@ self.addEventListener('install', e => {
 });
 
 // ── ACTIVATE: clean old caches ────────────────────────────
+self.addEventListener('message', e => {
+  if(e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
@@ -38,7 +42,12 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // App shell → cache first, fall back to network
+  // index.html → always network (never cache)
+  if(url.pathname.endsWith('/') || url.pathname.endsWith('index.html') || url.pathname === '/'){
+    e.respondWith(fetch(e.request).catch(() => caches.match('./index.html')));
+    return;
+  }
+  // Static assets (icons, manifest) → cache first
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;

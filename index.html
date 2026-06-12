@@ -271,7 +271,7 @@ main{padding:10px 14px 80px;max-width:900px;margin:0 auto;overflow-x:hidden}
   <div class="h-row1">
     <div>
       <div class="logo">⚽ World Cup <span>2026</span></div>
-      <div class="logo-sub">Live · Kyiv time (EEST UTC+3)</div>
+      <div class="logo-sub">Live · Kyiv time (EEST UTC+3) · <span id="bver" style="opacity:.5"></span></div>
     </div>
     <div class="clock">
       <div class="clock-t" id="ct">--:--</div>
@@ -283,6 +283,7 @@ main{padding:10px 14px 80px;max-width:900px;margin:0 auto;overflow-x:hidden}
     <span class="stxt" id="stxt">Connecting...</span>
     <span class="lfetch" id="lfetch"></span>
     <button class="btn-r" id="btn-r" onclick="fetchData()">↻</button>
+    <button class="btn-r" onclick="forceUpdate()" title="Clear cache & reload" style="background:rgba(231,76,60,.2);border-color:rgba(231,76,60,.4)">⚡</button>
   </div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="switchTab('schedule',this)">📅 Schedule</button>
@@ -338,13 +339,13 @@ const KYIV=3*60;
 // jsDelivr = GitHub CDN mirror, sends Access-Control-Allow-Origin:* → works on iOS file:// origin
 // allorigins + corsproxy = CORS proxies as fallbacks
 const FEEDS=[
-  // raw.githubusercontent works from HTTPS (GitHub Pages) — no cache, always fresh
+  // ESPN public API — real-time, no key, CORS:* — primary live source
+  'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard',
+  // openfootball — manually updated, used as schedule fallback
   'https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json',
-  // jsDelivr: works everywhere but caches up to 24h — fallback only
-  'https://cdn.jsdelivr.net/gh/openfootball/worldcup.json@master/2026/worldcup.json',
-  // CORS proxies as last resort (slow but universal)
   'https://api.allorigins.win/raw?url=https%3A%2F%2Fraw.githubusercontent.com%2Fopenfootball%2Fworldcup.json%2Fmaster%2F2026%2Fworldcup.json',
 ];
+const ESPN_SUMMARY = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=';
 const GROUP_TEAMS={
   A:['Mexico','South Africa','South Korea','Czech Republic'],
   B:['Canada','Bosnia & Herzegovina','Qatar','Switzerland'],
@@ -360,8 +361,19 @@ const GROUP_TEAMS={
   L:['England','Croatia','Ghana','Panama'],
 };
 // Normalize feed team names to GROUP_TEAMS canonical names
-const TEAM_NORM={'Türkiye':'Turkey','Turkiye':'Turkey','Czechia':'Czech Republic',
-  "Côte d'Ivoire":'Ivory Coast','Bosnia and Herzegovina':'Bosnia & Herzegovina'};
+const TEAM_NORM={
+  'Türkiye':'Turkey','Turkiye':'Turkey',
+  'Czechia':'Czech Republic','Czech Rep.':'Czech Republic',
+  "Côte d'Ivoire":'Ivory Coast',"Cote d'Ivoire":'Ivory Coast',
+  'Bosnia and Herzegovina':'Bosnia & Herzegovina',
+  'Bosnia-Herzegovina':'Bosnia & Herzegovina',
+  'Bosnia and Herzegov.':'Bosnia & Herzegovina',
+  'Korea Republic':'South Korea','Republic of Korea':'South Korea','Korea Rep.':'South Korea',
+  'IR Iran':'Iran','Islamic Republic of Iran':'Iran',
+  'United States':'USA','United States of America':'USA',
+  'DR Congo':'DR Congo','Congo DR':'DR Congo','Democratic Republic of Congo':'DR Congo',
+  'Cabo Verde':'Cape Verde',
+};
 function normTeam(n){return TEAM_NORM[n]||n;}
 
 // ═══════════════════════════════════════════
@@ -437,88 +449,349 @@ async function fetchData(){
   const dot=document.getElementById('sdot'),txt=document.getElementById('stxt'),btn=document.getElementById('btn-r');
   btn.disabled=true;
 
-  // Seed is always loaded first so groups/bracket always have data
+  // Always start from embedded seed so UI is instant
   if(MATCHES.length===0){
     MATCHES=FALLBACK.map(normalizeMatch);
-    dot.className='sdot loading';txt.textContent='Seed loaded, fetching live...';
+    dot.className='sdot loading';txt.textContent='Loading...';
     renderAll();
   }
 
   dot.className='sdot loading';txt.textContent='Fetching live data...';
-  let data=null,feed='';
-  for(const url of FEEDS){
-    try{
-      const res=await fetch(url,{cache:'no-store'});
-      if(!res.ok)continue;
-      const json=await res.json();
-      let raw=null;
-      if(Array.isArray(json))raw=json;
-      else if(json.matches)raw=json.matches;
-      else if(json.games)raw=json.games;
-      else if(json.contents){try{const p=JSON.parse(json.contents);raw=p.matches||p;}catch(e){}}
-      if(raw&&raw.length>0){data=raw;feed=url.includes('jsdelivr')?'jsDelivr':url.includes('allorigins')?'allorigins':url.includes('corsproxy')?'corsproxy':'feed';break;}
-    }catch(e){continue;}
-  }
-  if(data){
-    MATCHES=data.map(normalizeMatch);
-    const d=new Date(kyivMs(nowMs()));
-    const ts=pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());
-    const scored=data.filter(m=>m.score).length;
-    dot.className='sdot ok';
-    txt.textContent='Live · '+feed+' · '+scored+' results';
-    document.getElementById('lfetch').textContent=ts+' Kyiv';
-  }else{
-    const scored=MATCHES.filter(m=>m.score).length;
-    dot.className='sdot err';
-    txt.textContent='Network unavailable · seed data · '+scored+' results embedded';
-  }
-  btn.disabled=false;
-  renderAll();
-}
 
-// ═══════════════════════════════════════════
-// LIVE STATS — fetch from Claude API with web_search
-// ═══════════════════════════════════════════
-async function fetchLiveStats(matchId){
-  const m=MATCHES.find(x=>x.id===matchId);
-  if(!m)return;
-  const panel=document.getElementById('stats-panel-'+matchId);
-  const el=document.getElementById('stats-'+matchId);
-  if(!el)return;
-  el.innerHTML='<div class="stats-loading">⚽ Loading match data...</div>';
-
-  // Build stats from what we already have in the feed (goals, score)
-  // Then try to enrich from openfootball more detail feed
-  const statsFromFeed = buildStatsFromFeed(m);
-  
-  // Try to fetch extra detail from openfootball/worldcup.more (has lineups, events)
-  let enriched = false;
+  // ── Try ESPN first (real-time scores + status) ──────────────────────────
+  let espnOk=false;
   try{
-    const moreUrl = 'https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json';
-    const res = await fetch(moreUrl, {cache:'no-store'});
+    const res=await fetch(FEEDS[0],{cache:'no-store'});
     if(res.ok){
-      const data = await res.json();
-      const matches = data.matches || data;
-      // Find this specific match
-      const raw = matches.find(r => {
-        const t1 = normTeam(r.team1||''), t2 = normTeam(r.team2||'');
-        return (t1===m.team1&&t2===m.team2)||(t1===m.team2&&t2===m.team1);
-      });
-      if(raw && raw.score){
-        // Merge events from raw goals
-        statsFromFeed.events = [];
-        if(raw.goals1) raw.goals1.forEach(g=>statsFromFeed.events.push({min:g.minute,team:1,type:'goal',player:g.name}));
-        if(raw.goals2) raw.goals2.forEach(g=>statsFromFeed.events.push({min:g.minute,team:2,type:'goal',player:g.name}));
-        if(raw.bookings1) raw.bookings1.forEach(g=>statsFromFeed.events.push({min:g.minute,team:1,type:g.type||'yellow',player:g.name}));
-        if(raw.bookings2) raw.bookings2.forEach(g=>statsFromFeed.events.push({min:g.minute,team:2,type:g.type||'yellow',player:g.name}));
-        statsFromFeed.yellow_cards[0] = (raw.bookings1||[]).length;
-        statsFromFeed.yellow_cards[1] = (raw.bookings2||[]).length;
-        enriched = true;
+      const espn=await res.json();
+      if(espn.events&&espn.events.length>0){
+        mergeESPN(espn.events);
+        espnOk=true;
+        const d=new Date(kyivMs(nowMs()));
+        const live=MATCHES.filter(m=>m.status==='live').length;
+        const scored=MATCHES.filter(m=>m.score).length;
+        dot.className='sdot ok';
+        txt.textContent='ESPN · '+(live?live+' LIVE · ':'')+scored+' results';
+        console.log('[ESPN] merged: live='+live+' scored='+scored);
+        document.getElementById('lfetch').textContent=pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+' Kyiv';
       }
     }
   }catch(e){}
 
-  renderLiveStats(matchId, m, statsFromFeed, enriched);
+  // ── Also try openfootball for schedule/goalscorer details ───────────────
+  try{
+    const url=espnOk?FEEDS[1]:FEEDS[2]; // use proxy if ESPN failed
+    const res=await fetch(espnOk?FEEDS[1]:FEEDS[2],{cache:'no-store'});
+    if(res.ok){
+      const json=await res.json();
+      const raw=Array.isArray(json)?json:(json.matches||json.games||[]);
+      if(raw.length>0) mergeOpenfootball(raw);
+      if(!espnOk){
+        const scored=MATCHES.filter(m=>m.score).length;
+        dot.className='sdot ok';
+        txt.textContent='openfootball · '+scored+' results';
+        const d=new Date(kyivMs(nowMs()));
+        document.getElementById('lfetch').textContent=pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+' Kyiv';
+      }
+    }
+  }catch(e){}
+
+  if(!espnOk&&MATCHES.filter(m=>m.score).length===0){
+    dot.className='sdot err';
+    txt.textContent='Offline · seed data';
+  }
+
+  btn.disabled=false;
+  renderAll();
+}
+
+// ── Merge ESPN events into MATCHES ─────────────────────────────────────────
+function mergeESPN(events){
+  console.log('[ESPN] mergeESPN called with', events.length, 'events');
+  events.forEach(ev=>{
+    const comps=ev.competitions||[];
+    if(!comps.length)return;
+    const comp=comps[0];
+    const competitors=comp.competitors||[];
+    if(competitors.length<2)return;
+
+    // ESPN competitor[0]=home, [1]=away
+    const home=competitors.find(c=>c.homeAway==='home')||competitors[0];
+    const away=competitors.find(c=>c.homeAway==='away')||competitors[1];
+    const t1=normTeam(home.team.displayName||home.team.name||'');
+    const t2=normTeam(away.team.displayName||away.team.name||'');
+    const s1=parseInt(home.score||'0');
+    const s2=parseInt(away.score||'0');
+    const statusType=ev.status?.type?.name||'';  // STATUS_IN_PROGRESS, STATUS_FINAL, STATUS_SCHEDULED
+    const clock=ev.status?.displayClock||'';
+    const period=ev.status?.period||0;
+
+    // Match by kickoff date (ESPN event.date is ISO UTC)
+    const evDate=new Date(ev.date||'').toISOString().slice(0,10); // YYYY-MM-DD
+    const evUtcMs=new Date(ev.date||'').getTime();
+
+    // Try name match first, then fall back to time proximity (within 2h)
+    let match=MATCHES.find(m=>{
+      const n1=m.team1.toLowerCase().replace(/[^a-z]/g,'');
+      const n2=m.team2.toLowerCase().replace(/[^a-z]/g,'');
+      const e1=t1.toLowerCase().replace(/[^a-z]/g,'');
+      const e2=t2.toLowerCase().replace(/[^a-z]/g,'');
+      // First 4 chars comparison — robust enough for most names
+      return (n1.slice(0,4)===e1.slice(0,4)||n1.includes(e1.slice(0,4))||e1.includes(n1.slice(0,4)))&&
+             (n2.slice(0,4)===e2.slice(0,4)||n2.includes(e2.slice(0,4))||e2.includes(n2.slice(0,4)));
+    });
+    // Fallback: match by kickoff time (within 4 hours of ESPN event)
+    if(!match&&evUtcMs){
+      match=MATCHES.find(m=>Math.abs(m.utcMs-evUtcMs)<4*3600*1000&&!m.espnId);
+    }
+    console.log('[ESPN]', t1, 'vs', t2, '→', match?match.team1:'NOT FOUND', '| status='+statusType+' score='+s1+'-'+s2+' clock='+clock);
+
+    if(!match)return;
+
+    match.espnId=ev.id;
+
+    // Always take ESPN score
+    match.score=s1+' - '+s2;
+
+    // Determine status: ESPN statusType + our own clock as source of truth
+    const nowU=nowMs();
+    const isFinal=statusType==='STATUS_FINAL'||(nowU>match.utcMs+110*60000&&(s1>0||s2>0));
+    const isKickoff=nowU>match.utcMs-2*60000; // started (or 2min before)
+    const isOver=nowU>match.utcMs+130*60000;
+
+    if(isFinal||statusType==='STATUS_FINAL'){
+      match.status='finished';
+      match.minute='FT';
+    }else if(isKickoff&&!isOver){
+      match.status='live';
+      match.minute=statusType==='STATUS_HALFTIME'?'HT':(clock||'Live');
+    }else if(isOver){
+      match.status='finished';
+      match.minute='FT';
+    }
+    console.log('[ESPN]✓',match.team1,'vs',match.team2,'→ status='+match.status+' score='+match.score+' espnStatus='+statusType);
+
+    // Parse ESPN competition details for goals/cards (from scoreboard)
+    const details=comp.details||[];
+    if(details.length>0){
+      match.events=[];match.scorers1=[];match.scorers2=[];
+      details.forEach(d=>{
+        const dtype=(d.type?.text||d.type?.name||'').toLowerCase();
+        const dtypeId=d.type?.id||0;
+        const isHome=d.team?.homeAway==='home'||(home.team.id&&String(d.team?.id)===String(home.team.id));
+        const player=(d.athletesInvolved||[]).map(a=>a.displayName||'').filter(Boolean).join(', ');
+        const min=d.clock?.displayValue||'';
+        const isGoal=dtype.includes('goal')||dtype.includes('score')||+dtypeId===1;
+        const isYellow=dtype.includes('yellow')||+dtypeId===57;
+        const isRed=dtype.includes('red')||+dtypeId===77;
+        const type=isGoal?'goal':isRed?'red':isYellow?'yellow':'event';
+        match.events.push({min,team:isHome?1:2,type,player});
+        if(isGoal){
+          const entry=player+(min?' '+min+"'":'');
+          if(isHome)match.scorers1.push(entry);
+          else match.scorers2.push(entry);
+        }
+      });
+    }
+  });
+}
+
+// ── Merge openfootball data (goalscorer names, static schedule) ────────────
+function mergeOpenfootball(raw){
+  raw.forEach((r,i)=>{
+    if(!r.score)return;
+    const t1=normTeam(r.team1||''),t2=normTeam(r.team2||'');
+    const match=MATCHES.find(m=>{
+      const n1=m.team1.toLowerCase(),n2=m.team2.toLowerCase();
+      const e1=t1.toLowerCase(),e2=t2.toLowerCase();
+      return(n1===e1||n1.includes(e1.split(' ')[0]))&&(n2===e2||n2.includes(e2.split(' ')[0]));
+    });
+    if(!match)return;
+    // Only update score if ESPN hasn't already set it (ESPN is more real-time)
+    if(!match.espnId){
+      const ft=r.score.ft;
+      match.score=ft[0]+' - '+ft[1];
+      match.status=nowMs()>match.utcMs+110*60000?'finished':'live';
+    }
+    // Always take goalscorer names from openfootball (more detailed)
+    if(r.goals1)match.scorers1=r.goals1.map(g=>g.name+' '+g.minute+"'");
+    if(r.goals2)match.scorers2=r.goals2.map(g=>g.name+' '+g.minute+"'");
+    if(!match.events){
+      match.events=[];
+      (r.goals1||[]).forEach(g=>match.events.push({min:g.minute,team:1,type:'goal',player:g.name}));
+      (r.goals2||[]).forEach(g=>match.events.push({min:g.minute,team:2,type:'goal',player:g.name}));
+    }
+  });
+}
+
+async function fetchLiveStats(matchId){
+  const m=MATCHES.find(x=>x.id===matchId);
+  if(!m)return;
+  const el=document.getElementById('stats-'+matchId);
+  if(!el)return;
+  el.innerHTML='<div class="stats-loading">⚽ Loading match data...</div>';
+
+  // If we have an ESPN event ID, fetch full summary with real stats
+  // Try ESPN summary for all matches that have an ESPN ID (live or finished)
+  if(m.espnId){
+    try{
+      const res=await fetch(ESPN_SUMMARY+m.espnId,{cache:'no-store'});
+      if(res.ok){
+        const data=await res.json();
+        const stats=parseESPNSummary(data,m);
+        if(stats){
+          // Merge parsed events back into match for scorer line on card
+          if(stats.events&&stats.events.length>0) m.events=stats.events;
+          renderLiveStats(matchId,m,stats,true);
+          renderSchedule(); // refresh card scorer line
+          return;
+        }
+      }
+    }catch(e){console.warn('[ESPN summary] fetch failed:',e.message);}
+  }
+  // Fallback: build from feed data (openfootball goals)
+  renderLiveStats(matchId,m,buildStatsFromFeed(m),false);
+}
+
+function parseESPNSummary(data,m){
+  try{
+    // ESPN summary can be in root or inside gamepackageJSON
+    const root=data.gamepackageJSON||data;
+    const comp=(data.header?.competitions||root.header?.competitions||[])[0];
+    const bs=root.boxscore||data.boxscore;
+    const teams=bs?.teams||[];
+
+    // Log all available stat names so we know what ESPN returns
+    if(teams.length>0){
+      const allStatNames=(teams[0].statistics||[]).map(s=>s.name+'('+s.displayValue+')');
+      console.log('[ESPN summary] stats available:',allStatNames.join(', '));
+    }
+
+    // Comprehensive stat map — covers all known ESPN soccer stat names
+    const statsMap={
+      possession:[0,0],shots:[0,0],shots_on_target:[0,0],shots_off_target:[0,0],
+      blocked_shots:[0,0],corners:[0,0],fouls:[0,0],offsides:[0,0],
+      saves:[0,0],passes:[0,0],pass_accuracy:[0,0],yellow_cards:[0,0],red_cards:[0,0],
+    };
+    const ESPN_MAP={
+      // possession
+      'possessionPct':'possession',
+      // shots
+      'totalShots':'shots','shotsOnTarget':'shots_on_target',
+      'shotsOffTarget':'shots_off_target','blockedShots':'blocked_shots',
+      // corners, fouls, offsides
+      'cornerKicks':'corners','fouls':'fouls','offsides':'offsides',
+      // goalkeeper
+      'saves':'saves','goalKeeperSaves':'saves',
+      // passing
+      'totalPasses':'passes','passAccuracy':'pass_accuracy',
+      'accuratePasses':'passes',
+      // discipline
+      'yellowCards':'yellow_cards','redCards':'red_cards',
+    };
+
+    // ESPN puts home team first in boxscore — figure out which index is home
+    // by comparing team id to comp.competitors homeAway
+    const compTeams=comp?.competitors||[];
+    const homeCompId=compTeams.find(c=>c.homeAway==='home')?.id;
+    const awayCompId=compTeams.find(c=>c.homeAway==='away')?.id;
+
+    teams.forEach(team=>{
+      const tid=team.team?.id;
+      const isHome=tid===homeCompId||(homeCompId==null&&team.homeAway==='home');
+      const ti=isHome?0:1;
+      (team.statistics||[]).forEach(stat=>{
+        const key=ESPN_MAP[stat.name];
+        if(key!==undefined){
+          // possession is already %, others are counts
+          statsMap[key][ti]=parseFloat(stat.displayValue)||0;
+        }
+      });
+    });
+
+    // ── Events from plays array (most detailed) ──────────────────────────
+    const plays=root.plays||data.plays||[];
+    const events=[];
+
+    plays.forEach(p=>{
+      const rawType=(p.type?.text||p.type?.name||'').toLowerCase();
+      const isGoal=rawType.includes('goal')||rawType.includes('score');
+      const isYellow=rawType.includes('yellow')||rawType.includes('caution');
+      const isRed=rawType.includes('red card')||rawType.includes('send off');
+      const isSub=rawType.includes('substitut');
+      const isPenalty=rawType.includes('penalty');
+      if(!isGoal&&!isYellow&&!isRed&&!isSub&&!isPenalty)return;
+
+      const isHome=p.team?.id===homeCompId||p.team?.homeAway==='home';
+      // Full player name from participants
+      const player=(p.participants||[])
+        .map(x=>x.athlete?.displayName||x.athlete?.fullName||'').filter(Boolean).join(', ');
+      const min=p.clock?.displayValue||'';
+
+      events.push({
+        min, team:isHome?1:2,
+        type:isGoal?'goal':isRed?'red':isYellow?'yellow':isPenalty?'penalty':'sub',
+        player
+      });
+    });
+
+    // ── Fallback: competition details array ──────────────────────────────
+    if(events.length===0&&comp){
+      const details=comp.details||[];
+      console.log('[ESPN summary] using details, count='+details.length);
+      details.forEach(d=>{
+        // Log raw type to understand ESPN's actual values
+        const rawType=(d.type?.text||d.type?.name||d.athleteType||'').toLowerCase();
+        const rawTypeId=d.type?.id||'';
+        const athletes=(d.athletesInvolved||[]).map(a=>a.displayName||a.fullName||'').filter(Boolean);
+        console.log('[ESPN detail] type='+JSON.stringify(d.type)+' rawType='+rawType+' typeId='+rawTypeId+' athletes='+athletes.join(','));
+
+        // Only skip if no player name AND no recognisable event type
+        const isGoal=rawType.includes('goal')||rawType.includes('score')||rawTypeId==='1'||+rawTypeId===1;
+        const isYellow=rawType.includes('yellow')||rawType.includes('caution')||rawTypeId==='57'||+rawTypeId===57;
+        const isRed=rawType.includes('red')||rawTypeId==='77'||+rawTypeId===77;
+        const isSub=rawType.includes('sub')||rawTypeId==='58'||+rawTypeId===58;
+        const isPenalty=rawType.includes('penalty');
+
+        // Accept if we know the type OR if there's a player name
+        if(!isGoal&&!isYellow&&!isRed&&!isSub&&!isPenalty&&athletes.length===0)return;
+
+        const tid=d.team?.id;
+        const isHome=homeCompId?(tid===homeCompId||tid===String(homeCompId)):(d.team?.homeAway==='home');
+        const player=athletes.join(', ');
+        const min=d.clock?.displayValue||'';
+        const evType=isGoal?'goal':isRed?'red':isYellow?'yellow':isPenalty?'penalty':'event';
+        events.push({min, team:isHome?1:2, type:evType, player});
+      });
+    }
+
+    // ── Merge openfootball scorer names (they have correct full names) ───
+    // Only add if ESPN didn't already get them
+    const addFeedEvents=(scorers,team)=>{
+      (scorers||[]).forEach(s=>{
+        // scorers format: "First Last MM'" 
+        const minMatch=s.match(/(\d+\+?\d*)'$/);
+        const min=minMatch?minMatch[1]:'';
+        const player=s.replace(/\s+\d+\+?\d*'$/, '').trim();
+        const alreadyHave=events.find(e=>
+          e.team===team && e.type==='goal' &&
+          (e.player.toLowerCase().includes(player.split(' ').pop().toLowerCase()))
+        );
+        if(!alreadyHave) events.push({min,team,type:'goal',player});
+      });
+    };
+    addFeedEvents(m.scorers1,1);
+    addFeedEvents(m.scorers2,2);
+
+    console.log('[ESPN summary] events:',events.map(e=>e.player+' '+e.min+"' "+e.type+' t'+e.team));
+
+    const s1=m.score?+m.score.split(' - ')[0]:0;
+    const s2=m.score?+m.score.split(' - ')[1]:0;
+    return{...statsMap,score:[s1,s2],minute:m.minute||m.status,events};
+  }catch(e){
+    console.error('[ESPN summary] parse error:',e.message);
+    return null;
+  }
 }
 
 function buildStatsFromFeed(m){
@@ -540,73 +813,160 @@ function buildStatsFromFeed(m){
   return{
     minute: m.status==='finished'?'FT':(m.status==='live'?'Live':'--'),
     score:[s1,s2],
-    possession:[50,50],// not in feed
-    shots:[s1*3+2,s2*3+2],// estimated
-    shots_on_target:[s1+1,s2+1],
-    corners:[0,0],fouls:[0,0],passes:[0,0],pass_accuracy:[0,0],
-    yellow_cards:yc,red_cards:rc,events
+    possession:[0,0],shots:[0,0],shots_on_target:[0,0],shots_off_target:[0,0],
+    blocked_shots:[0,0],corners:[0,0],offsides:[0,0],fouls:[0,0],saves:[0,0],
+    passes:[0,0],pass_accuracy:[0,0],yellow_cards:yc,red_cards:rc,events
   };
 }
 
 function renderLiveStats(id,m,s,enriched){
   const el=document.getElementById('stats-'+id);
   if(!el)return;
-  const icon={goal:'⚽',yellow:'🟨',red:'🟥',sub:'🔄',var:'📺',penalty:'🎯'};
 
-  function statRow(label,v1,v2,showBar){
-    const doBar = showBar!==false && (v1+v2)>0;
-    const total=v1+v2||1;
-    const p1=Math.round(v1/total*100), p2=100-p1;
-    return '<div style="margin-bottom:8px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'
-      +'<span style="font-size:12px;font-weight:600;color:var(--blue)">'+v1+'</span>'
+  const ICONS={goal:'⚽',yellow:'🟨',red:'🟥',sub:'🔄',penalty:'🎯',var:'📺'};
+
+  // Bar row: only for percentage stats (possession, pass accuracy)
+  function barRow(label,v1,v2){
+    if(!v1&&!v2)return '';
+    const t=v1+v2||1;
+    const p1=Math.round(v1/t*100),p2=100-p1;
+    return '<div style="margin-bottom:10px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+      +'<span style="font-size:13px;font-weight:700;color:var(--blue)">'+v1+'%</span>'
       +'<span style="font-size:9px;color:var(--gray);text-transform:uppercase;letter-spacing:.5px">'+label+'</span>'
-      +'<span style="font-size:12px;font-weight:600;color:#ff6b6b">'+v2+'</span>'
+      +'<span style="font-size:13px;font-weight:700;color:#ff6b6b">'+v2+'%</span>'
       +'</div>'
-      +(doBar?'<div style="display:flex;gap:2px;height:4px">'
-        +'<div style="flex:'+p1+';background:var(--blue);border-radius:2px 0 0 2px"></div>'
-        +'<div style="flex:'+p2+';background:#ff6b6b;border-radius:0 2px 2px 0"></div>'
-        +'</div>':'')
+      +'<div style="display:flex;height:5px;border-radius:3px;overflow:hidden">'
+      +'<div style="flex:'+p1+';background:var(--blue)"></div>'
+      +'<div style="flex:'+p2+';background:#ff6b6b"></div>'
+      +'</div></div>';
+  }
+
+  // Number row: for counts (shots, corners, fouls, cards) — no bar, just numbers
+  function numRow(label,v1,v2){
+    if(!v1&&!v2)return '';
+    const higher1=v1>v2,higher2=v2>v1;
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">'
+      +'<span style="font-size:14px;font-weight:'+(higher1?'800':'500')+';color:'+(higher1?'var(--white)':'var(--gray-l)')+'">'+v1+'</span>'
+      +'<span style="font-size:9px;color:var(--gray);text-transform:uppercase;letter-spacing:.5px">'+label+'</span>'
+      +'<span style="font-size:14px;font-weight:'+(higher2?'800':'500')+';color:'+(higher2?'var(--white)':'var(--gray-l)')+'">'+v2+'</span>'
       +'</div>';
   }
 
-  const events=(s.events||[]).sort((a,b)=>parseInt(a.min)-parseInt(b.min));
-  const evHtml = events.length===0
-    ? '<div class="no-events">No events recorded</div>'
-    : events.map(ev=>{
-        const isT2=ev.team===2;
-        return '<div class="event-row'+(isT2?' t2':'')+'">'
-          +'<span class="event-min">'+ev.min+"'</span>"
-          +'<span class="event-icon">'+(icon[ev.type]||'•')+'</span>'
-          +'<div><div class="event-name">'+(ev.player||'')+'</div>'
-          +'<div class="event-type">'+ev.type+'</div></div>'
-          +'</div>';
-      }).join('');
+  // Score + status header
+  const isLive=m.status==='live';
+  const isFT=m.status==='finished';
+  const minuteLabel=isFT?'FT':(m.minute&&m.minute!=='Live'?m.minute+"'":'');
+  const score=m.score||'- -';
 
-  const scoreLabel = m.score
-    ? '<span style="font-family:Bebas Neue,sans-serif;font-size:22px;letter-spacing:2px;color:var(--gold)">'+m.score+'</span>'
-    : '';
+  let html='';
 
-  const statusLabel = s.minute==='FT'
-    ? '<span style="font-size:10px;color:var(--gray-l);background:var(--border);padding:2px 8px;border-radius:4px">Full Time</span>'
-    : s.minute==='Live'
-    ? '<span style="font-size:10px;color:var(--red);font-weight:700">LIVE</span>'
-    : '';
-
-  el.innerHTML =
-    '<div class="stats-header" style="margin-bottom:12px">'
-      +'<span class="stats-team-name blue">'+m.team1+'</span>'
-      +'<div style="text-align:center">'+statusLabel+'<div>'+scoreLabel+'</div></div>'
-      +'<span class="stats-team-name red-t">'+m.team2+'</span>'
+  // ── Score header ──────────────────────────────────────────────────────
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px">'
+    +'<div style="flex:1;text-align:left;font-size:12px;font-weight:700;color:var(--blue)">'+m.team1+'</div>'
+    +'<div style="text-align:center;flex-shrink:0">'
+      +(isLive?'<div style="font-size:9px;font-weight:800;color:var(--red);letter-spacing:1px;margin-bottom:2px">● LIVE '+(minuteLabel||'')+'</div>':'')
+      +(isFT?'<div style="font-size:9px;color:var(--gray-l);margin-bottom:2px">FULL TIME</div>':'')
+      +'<div style="font-family:Bebas Neue,sans-serif;font-size:28px;letter-spacing:3px;color:var(--gold);line-height:1">'+score+'</div>'
     +'</div>'
-    + statRow('Goals',s.score[0],s.score[1])
-    + statRow('Yellow Cards',s.yellow_cards[0],s.yellow_cards[1],false)
-    + statRow('Red Cards',s.red_cards[0],s.red_cards[1],false)
-    +'<div class="stats-section-title">⚽ Goals & Events</div>'
-    +'<div class="events-list">'+evHtml+'</div>'
-    +'<div style="font-size:9px;color:var(--gray);text-align:center;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">'
-      +'Source: openfootball/worldcup.json · tap to refresh'
-    +'</div>';
+    +'<div style="flex:1;text-align:right;font-size:12px;font-weight:700;color:#ff6b6b">'+m.team2+'</div>'
+  +'</div>';
+
+  // ── Match stats ────────────────────────────────────────────────────────
+  const hasStats=s.possession&&(s.possession[0]!==50||s.possession[1]!==50)||(s.shots[0]+s.shots[1])>0;
+  // Section heading helper
+  function sectionHead(label){
+    return '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin:12px 0 6px;border-bottom:1px solid var(--border);padding-bottom:3px">'+label+'</div>';
+  }
+
+  const hasShots=(s.shots[0]+s.shots[1])>0;
+  const hasPoss=s.possession[0]>0||s.possession[1]>0;
+  const hasPasses=(s.passes[0]+s.passes[1])>0;
+  const hasCards=(s.yellow_cards[0]+s.yellow_cards[1]+s.red_cards[0]+s.red_cards[1])>0;
+  const hasAnyStats=hasShots||hasPoss||hasPasses||hasCards;
+
+  if(hasAnyStats){
+    html+=sectionHead('Match Stats');
+    html+='<div style="margin-bottom:4px">';
+    if(hasPoss) html+=barRow('Possession %',s.possession[0],s.possession[1]);
+    if(hasShots){
+      html+=numRow('Shots',s.shots[0],s.shots[1]);
+      if(s.shots_on_target[0]+s.shots_on_target[1]>0)
+        html+=numRow('On Target',s.shots_on_target[0],s.shots_on_target[1]);
+      if((s.shots_off_target||[0,0])[0]+(s.shots_off_target||[0,0])[1]>0)
+        html+=numRow('Off Target',(s.shots_off_target||[0,0])[0],(s.shots_off_target||[0,0])[1]);
+      if((s.blocked_shots||[0,0])[0]+(s.blocked_shots||[0,0])[1]>0)
+        html+=numRow('Blocked',(s.blocked_shots||[0,0])[0],(s.blocked_shots||[0,0])[1]);
+    }
+    if(s.corners[0]+s.corners[1]>0) html+=numRow('Corners',s.corners[0],s.corners[1]);
+    if((s.offsides||[0,0])[0]+(s.offsides||[0,0])[1]>0) html+=numRow('Offsides',(s.offsides||[0,0])[0],(s.offsides||[0,0])[1]);
+    if(s.fouls[0]+s.fouls[1]>0) html+=numRow('Fouls',s.fouls[0],s.fouls[1]);
+    if((s.saves||[0,0])[0]+(s.saves||[0,0])[1]>0) html+=numRow('GK Saves',(s.saves||[0,0])[0],(s.saves||[0,0])[1]);
+    if(hasPasses){
+      html+=numRow('Passes',s.passes[0],s.passes[1]);
+      if(s.pass_accuracy[0]+s.pass_accuracy[1]>0)
+        html+=barRow('Pass Acc %',s.pass_accuracy[0],s.pass_accuracy[1]);
+    }
+    if(hasCards){
+      if(s.yellow_cards[0]+s.yellow_cards[1]>0) html+=numRow('Yellow Cards',s.yellow_cards[0],s.yellow_cards[1]);
+      if(s.red_cards[0]+s.red_cards[1]>0) html+=numRow('Red Cards',s.red_cards[0],s.red_cards[1]);
+    }
+    html+='</div>';
+  } else {
+    // No stats yet — only cards from events
+    const yc=[0,0],rc=[0,0];
+    (s.events||[]).forEach(e=>{if(e.type==='yellow')yc[e.team-1]++;if(e.type==='red')rc[e.team-1]++;});
+    if(yc[0]+yc[1]>0) html+=numRow('Yellow Cards',yc[0],yc[1]);
+    if(rc[0]+rc[1]>0) html+=numRow('Red Cards',rc[0],rc[1]);
+  }
+
+  // ── Events timeline ────────────────────────────────────────────────────
+  const events=(s.events||[])
+    .filter(ev=>ev.player||ev.min) // skip empty
+    .sort((a,b)=>(parseInt(a.min)||0)-(parseInt(b.min)||0));
+
+  html+='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin:12px 0 8px;border-bottom:1px solid var(--border);padding-bottom:4px">Match Events</div>';
+
+  if(events.length===0){
+    html+='<div style="text-align:center;color:var(--gray);font-size:11px;padding:8px 0">'
+      +(isLive?'Match in progress — no events yet':'No events recorded')+'</div>';
+  } else {
+    // Two-column layout: team1 events on left, team2 on right
+    html+='<div style="display:flex;flex-direction:column;gap:4px">';
+    events.forEach(ev=>{
+      const isT1=ev.team===1;
+      const ico=ICONS[ev.type]||'•';
+      const name=ev.player||'';
+      const min=ev.min?(ev.min+"'"):'';
+      const nameShort=name; // always full name
+
+      if(isT1){
+        // Team 1: left-aligned — icon · name · min
+        html+='<div style="display:flex;align-items:center;gap:6px;padding:3px 0">'
+          +'<span style="font-size:13px">'+ico+'</span>'
+          +'<span style="font-size:11px;font-weight:600;color:var(--white)">'+nameShort+'</span>'
+          +'<span style="font-size:10px;color:var(--gold);font-family:Bebas Neue,sans-serif">'+min+'</span>'
+          +'<div style="flex:1"></div>'
+        +'</div>';
+      } else {
+        // Team 2: right-aligned — min · name · icon
+        html+='<div style="display:flex;align-items:center;gap:6px;padding:3px 0">'
+          +'<div style="flex:1"></div>'
+          +'<span style="font-size:10px;color:var(--gold);font-family:Bebas Neue,sans-serif">'+min+'</span>'
+          +'<span style="font-size:11px;font-weight:600;color:var(--white)">'+nameShort+'</span>'
+          +'<span style="font-size:13px">'+ico+'</span>'
+        +'</div>';
+      }
+    });
+    html+='</div>';
+  }
+
+  // ── Footer ─────────────────────────────────────────────────────────────
+  html+='<div style="font-size:9px;color:var(--gray);text-align:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--border)">'
+    +(m.espnId?'⚡ ESPN live · tap to refresh':'📋 Feed data · ESPN matching...')
+  +'</div>';
+
+  el.innerHTML=html;
 }
 
 function toggleStats(id){
@@ -667,10 +1027,20 @@ function renderSchedule(){
       else if(cd)rHtml=`<div class="cd">${cd}</div>`;
       const tagCls=m.stageType==='final'?'fin':m.stageType==='knockout'?'ko':'';
       let sc='';
-      if((m.scorers1.length||m.scorers2.length)&&m.score){
-        const s1=m.scorers1.map(s=>`<span>${s}</span>`).join(' ');
-        const s2=m.scorers2.map(s=>`<span>${s}</span>`).join(' ');
-        sc=`<div class="scorers">${s1}${s1&&s2?' · ':''}${s2}</div>`
+      if(m.score){
+        // Build scorer display: prefer openfootball names, fall back to ESPN events
+        let goals1=m.scorers1||[];
+        let goals2=m.scorers2||[];
+        // For live matches: extract goals from m.events (ESPN data)
+        if((goals1.length+goals2.length===0)&&m.events&&m.events.length>0){
+          goals1=m.events.filter(e=>e.type==='goal'&&e.team===1).map(e=>(e.player||'?')+(e.min?" "+e.min+"'":''));
+          goals2=m.events.filter(e=>e.type==='goal'&&e.team===2).map(e=>(e.player||'?')+(e.min?" "+e.min+"'":''));
+        }
+        if(goals1.length||goals2.length){
+          const g1=goals1.map(s=>`<span>${s}</span>`).join(' ');
+          const g2=goals2.map(s=>`<span>${s}</span>`).join(' ');
+          sc=`<div class="scorers">${g1}${g1&&g2?' · ':''}${g2}</div>`;
+        }
       }
       const liveHint=(live||finished&&m.score)?`<div class="expand-hint">${live?'▼ tap for live stats':'▼ tap for match report'}</div>`:'';
 
@@ -712,11 +1082,15 @@ function renderGroups(){
     teams.forEach(t=>{standings[g][t]={p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0}});
   });
   MATCHES.forEach(m=>{
-    if(!m.score)return;
+    // Include scored matches AND currently live matches (treat as 0-0 so they appear in table)
+    const now=nowMs();
+    const isLiveNow=!m.score&&now>=m.utcMs&&now<m.utcMs+130*60000;
+    if(!m.score&&!isLiveNow)return;
     if(!m.stage.startsWith('Group '))return;
     const gk=m.stage.replace('Group ','');
     if(!standings[gk])return;
-    const[g1,g2]=m.score.split(' - ').map(Number);
+    const scoreStr=m.score||'0 - 0';
+    const[g1,g2]=scoreStr.split(' - ').map(Number);
     const find=(g,name)=>{
       if(standings[g][name])return name;
       const nl=name.toLowerCase();
@@ -852,15 +1226,45 @@ document.getElementById('search').addEventListener('input',e=>{searchQ=e.target.
 // SEED DATA — embedded live feed snapshot
 // App works offline/iOS with this; live fetch updates on top
 // ═══════════════════════════════════════════
-const SEED_JSON={"name":"World Cup 2026","matches":[{"round":"Matchday 1","date":"2026-06-11","time":"13:00 UTC-6","team1":"Mexico","team2":"South Africa","score":{"ft":[2,0],"ht":[1,0]},"goals1":[{"name":"Julián Quiñones","minute":"9"},{"name":"Raúl Jiménez","minute":"67"}],"goals2":[],"group":"Group A","ground":"Mexico City"},{"round":"Matchday 1","date":"2026-06-11","time":"20:00 UTC-6","team1":"South Korea","team2":"Czech Republic","score":{"ft":[2,1],"ht":[0,0]},"goals1":[{"name":"Hwang In-Beom","minute":"67"},{"name":"Oh Hyeon-Gyu","minute":"80"}],"goals2":[{"name":"Ladislav Krejcí","minute":"59"}],"group":"Group A","ground":"Guadalajara (Zapopan)"},{"round":"Matchday 8","date":"2026-06-18","time":"12:00 UTC-4","team1":"Czech Republic","team2":"South Africa","group":"Group A","ground":"Atlanta"},{"round":"Matchday 8","date":"2026-06-18","time":"19:00 UTC-6","team1":"Mexico","team2":"South Korea","group":"Group A","ground":"Guadalajara (Zapopan)"},{"round":"Matchday 14","date":"2026-06-24","time":"19:00 UTC-6","team1":"Czech Republic","team2":"Mexico","group":"Group A","ground":"Mexico City"},{"round":"Matchday 14","date":"2026-06-24","time":"19:00 UTC-6","team1":"South Africa","team2":"South Korea","group":"Group A","ground":"Monterrey (Guadalupe)"},{"round":"Matchday 2","date":"2026-06-12","time":"15:00 UTC-4","team1":"Canada","team2":"Bosnia & Herzegovina","group":"Group B","ground":"Toronto"},{"round":"Matchday 3","date":"2026-06-13","time":"12:00 UTC-7","team1":"Qatar","team2":"Switzerland","group":"Group B","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 8","date":"2026-06-18","time":"12:00 UTC-7","team1":"Switzerland","team2":"Bosnia & Herzegovina","group":"Group B","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 8","date":"2026-06-18","time":"15:00 UTC-7","team1":"Canada","team2":"Qatar","group":"Group B","ground":"Vancouver"},{"round":"Matchday 14","date":"2026-06-24","time":"12:00 UTC-7","team1":"Switzerland","team2":"Canada","group":"Group B","ground":"Vancouver"},{"round":"Matchday 14","date":"2026-06-24","time":"12:00 UTC-7","team1":"Bosnia & Herzegovina","team2":"Qatar","group":"Group B","ground":"Seattle"},{"round":"Matchday 3","date":"2026-06-13","time":"18:00 UTC-4","team1":"Brazil","team2":"Morocco","group":"Group C","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 3","date":"2026-06-13","time":"21:00 UTC-4","team1":"Haiti","team2":"Scotland","group":"Group C","ground":"Boston (Foxborough)"},{"round":"Matchday 9","date":"2026-06-19","time":"18:00 UTC-4","team1":"Scotland","team2":"Morocco","group":"Group C","ground":"Boston (Foxborough)"},{"round":"Matchday 9","date":"2026-06-19","time":"20:30 UTC-4","team1":"Brazil","team2":"Haiti","group":"Group C","ground":"Philadelphia"},{"round":"Matchday 14","date":"2026-06-24","time":"18:00 UTC-4","team1":"Scotland","team2":"Brazil","group":"Group C","ground":"Miami (Miami Gardens)"},{"round":"Matchday 14","date":"2026-06-24","time":"18:00 UTC-4","team1":"Morocco","team2":"Haiti","group":"Group C","ground":"Atlanta"},{"round":"Matchday 2","date":"2026-06-12","time":"18:00 UTC-7","team1":"USA","team2":"Paraguay","group":"Group D","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 3","date":"2026-06-13","time":"21:00 UTC-7","team1":"Australia","team2":"Turkey","group":"Group D","ground":"Vancouver"},{"round":"Matchday 9","date":"2026-06-19","time":"12:00 UTC-7","team1":"USA","team2":"Australia","group":"Group D","ground":"Seattle"},{"round":"Matchday 9","date":"2026-06-19","time":"20:00 UTC-7","team1":"Turkey","team2":"Paraguay","group":"Group D","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 15","date":"2026-06-25","time":"19:00 UTC-7","team1":"Turkey","team2":"USA","group":"Group D","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 15","date":"2026-06-25","time":"19:00 UTC-7","team1":"Paraguay","team2":"Australia","group":"Group D","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 4","date":"2026-06-14","time":"12:00 UTC-5","team1":"Germany","team2":"Curaçao","group":"Group E","ground":"Houston"},{"round":"Matchday 4","date":"2026-06-14","time":"19:00 UTC-4","team1":"Ivory Coast","team2":"Ecuador","group":"Group E","ground":"Philadelphia"},{"round":"Matchday 10","date":"2026-06-20","time":"16:00 UTC-4","team1":"Germany","team2":"Ivory Coast","group":"Group E","ground":"Toronto"},{"round":"Matchday 10","date":"2026-06-20","time":"19:00 UTC-5","team1":"Ecuador","team2":"Curaçao","group":"Group E","ground":"Kansas City"},{"round":"Matchday 15","date":"2026-06-25","time":"16:00 UTC-4","team1":"Curaçao","team2":"Ivory Coast","group":"Group E","ground":"Philadelphia"},{"round":"Matchday 15","date":"2026-06-25","time":"16:00 UTC-4","team1":"Ecuador","team2":"Germany","group":"Group E","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 4","date":"2026-06-14","time":"15:00 UTC-5","team1":"Netherlands","team2":"Japan","group":"Group F","ground":"Dallas (Arlington)"},{"round":"Matchday 4","date":"2026-06-14","time":"20:00 UTC-6","team1":"Sweden","team2":"Tunisia","group":"Group F","ground":"Monterrey (Guadalupe)"},{"round":"Matchday 10","date":"2026-06-20","time":"12:00 UTC-5","team1":"Netherlands","team2":"Sweden","group":"Group F","ground":"Houston"},{"round":"Matchday 10","date":"2026-06-20","time":"22:00 UTC-6","team1":"Tunisia","team2":"Japan","group":"Group F","ground":"Monterrey (Guadalupe)"},{"round":"Matchday 15","date":"2026-06-25","time":"18:00 UTC-5","team1":"Japan","team2":"Sweden","group":"Group F","ground":"Dallas (Arlington)"},{"round":"Matchday 15","date":"2026-06-25","time":"18:00 UTC-5","team1":"Tunisia","team2":"Netherlands","group":"Group F","ground":"Kansas City"},{"round":"Matchday 5","date":"2026-06-15","time":"12:00 UTC-7","team1":"Belgium","team2":"Egypt","group":"Group G","ground":"Seattle"},{"round":"Matchday 5","date":"2026-06-15","time":"18:00 UTC-7","team1":"Iran","team2":"New Zealand","group":"Group G","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 11","date":"2026-06-21","time":"12:00 UTC-7","team1":"Belgium","team2":"Iran","group":"Group G","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 11","date":"2026-06-21","time":"18:00 UTC-7","team1":"New Zealand","team2":"Egypt","group":"Group G","ground":"Vancouver"},{"round":"Matchday 16","date":"2026-06-26","time":"20:00 UTC-7","team1":"Egypt","team2":"Iran","group":"Group G","ground":"Seattle"},{"round":"Matchday 16","date":"2026-06-26","time":"20:00 UTC-7","team1":"New Zealand","team2":"Belgium","group":"Group G","ground":"Vancouver"},{"round":"Matchday 5","date":"2026-06-15","time":"12:00 UTC-4","team1":"Spain","team2":"Cape Verde","group":"Group H","ground":"Atlanta"},{"round":"Matchday 5","date":"2026-06-15","time":"18:00 UTC-4","team1":"Saudi Arabia","team2":"Uruguay","group":"Group H","ground":"Miami (Miami Gardens)"},{"round":"Matchday 11","date":"2026-06-21","time":"12:00 UTC-4","team1":"Spain","team2":"Saudi Arabia","group":"Group H","ground":"Atlanta"},{"round":"Matchday 11","date":"2026-06-21","time":"18:00 UTC-4","team1":"Uruguay","team2":"Cape Verde","group":"Group H","ground":"Miami (Miami Gardens)"},{"round":"Matchday 16","date":"2026-06-26","time":"19:00 UTC-5","team1":"Cape Verde","team2":"Saudi Arabia","group":"Group H","ground":"Houston"},{"round":"Matchday 16","date":"2026-06-26","time":"18:00 UTC-6","team1":"Uruguay","team2":"Spain","group":"Group H","ground":"Guadalajara (Zapopan)"},{"round":"Matchday 6","date":"2026-06-16","time":"15:00 UTC-4","team1":"France","team2":"Senegal","group":"Group I","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 6","date":"2026-06-16","time":"18:00 UTC-4","team1":"Iraq","team2":"Norway","group":"Group I","ground":"Boston (Foxborough)"},{"round":"Matchday 12","date":"2026-06-22","time":"17:00 UTC-4","team1":"France","team2":"Iraq","group":"Group I","ground":"Philadelphia"},{"round":"Matchday 12","date":"2026-06-22","time":"20:00 UTC-4","team1":"Norway","team2":"Senegal","group":"Group I","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 16","date":"2026-06-26","time":"15:00 UTC-4","team1":"Norway","team2":"France","group":"Group I","ground":"Boston (Foxborough)"},{"round":"Matchday 16","date":"2026-06-26","time":"15:00 UTC-4","team1":"Senegal","team2":"Iraq","group":"Group I","ground":"Toronto"},{"round":"Matchday 6","date":"2026-06-16","time":"20:00 UTC-5","team1":"Argentina","team2":"Algeria","group":"Group J","ground":"Kansas City"},{"round":"Matchday 6","date":"2026-06-16","time":"21:00 UTC-7","team1":"Austria","team2":"Jordan","group":"Group J","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 12","date":"2026-06-22","time":"12:00 UTC-5","team1":"Argentina","team2":"Austria","group":"Group J","ground":"Dallas (Arlington)"},{"round":"Matchday 12","date":"2026-06-22","time":"20:00 UTC-7","team1":"Jordan","team2":"Algeria","group":"Group J","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 17","date":"2026-06-27","time":"21:00 UTC-5","team1":"Algeria","team2":"Austria","group":"Group J","ground":"Kansas City"},{"round":"Matchday 17","date":"2026-06-27","time":"21:00 UTC-5","team1":"Jordan","team2":"Argentina","group":"Group J","ground":"Dallas (Arlington)"},{"round":"Matchday 7","date":"2026-06-17","time":"12:00 UTC-5","team1":"Portugal","team2":"DR Congo","group":"Group K","ground":"Houston"},{"round":"Matchday 7","date":"2026-06-17","time":"20:00 UTC-6","team1":"Uzbekistan","team2":"Colombia","group":"Group K","ground":"Mexico City"},{"round":"Matchday 13","date":"2026-06-23","time":"12:00 UTC-5","team1":"Portugal","team2":"Uzbekistan","group":"Group K","ground":"Houston"},{"round":"Matchday 13","date":"2026-06-23","time":"20:00 UTC-6","team1":"Colombia","team2":"DR Congo","group":"Group K","ground":"Guadalajara (Zapopan)"},{"round":"Matchday 17","date":"2026-06-27","time":"19:30 UTC-4","team1":"Colombia","team2":"Portugal","group":"Group K","ground":"Miami (Miami Gardens)"},{"round":"Matchday 17","date":"2026-06-27","time":"19:30 UTC-4","team1":"DR Congo","team2":"Uzbekistan","group":"Group K","ground":"Atlanta"},{"round":"Matchday 7","date":"2026-06-17","time":"15:00 UTC-5","team1":"England","team2":"Croatia","group":"Group L","ground":"Dallas (Arlington)"},{"round":"Matchday 7","date":"2026-06-17","time":"19:00 UTC-4","team1":"Ghana","team2":"Panama","group":"Group L","ground":"Toronto"},{"round":"Matchday 13","date":"2026-06-23","time":"16:00 UTC-4","team1":"England","team2":"Ghana","group":"Group L","ground":"Boston (Foxborough)"},{"round":"Matchday 13","date":"2026-06-23","time":"19:00 UTC-4","team1":"Panama","team2":"Croatia","group":"Group L","ground":"Toronto"},{"round":"Matchday 17","date":"2026-06-27","time":"17:00 UTC-4","team1":"Panama","team2":"England","group":"Group L","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 17","date":"2026-06-27","time":"17:00 UTC-4","team1":"Croatia","team2":"Ghana","group":"Group L","ground":"Philadelphia"},{"round":"Round of 32","num":73,"date":"2026-06-28","time":"12:00 UTC-7","team1":"2A","team2":"2B","ground":"Los Angeles (Inglewood)"},{"round":"Round of 32","num":74,"date":"2026-06-29","time":"16:30 UTC-4","team1":"1E","team2":"3A/B/C/D/F","ground":"Boston (Foxborough)"},{"round":"Round of 32","num":75,"date":"2026-06-29","time":"19:00 UTC-6","team1":"1F","team2":"2C","ground":"Monterrey (Guadalupe)"},{"round":"Round of 32","num":76,"date":"2026-06-29","time":"12:00 UTC-5","team1":"1C","team2":"2F","ground":"Houston"},{"round":"Round of 32","num":77,"date":"2026-06-30","time":"17:00 UTC-4","team1":"1I","team2":"3C/D/F/G/H","ground":"New York/New Jersey (East Rutherford)"},{"round":"Round of 32","num":78,"date":"2026-06-30","time":"12:00 UTC-5","team1":"2E","team2":"2I","ground":"Dallas (Arlington)"},{"round":"Round of 32","num":79,"date":"2026-06-30","time":"19:00 UTC-6","team1":"1A","team2":"3C/E/F/H/I","ground":"Mexico City"},{"round":"Round of 32","num":80,"date":"2026-07-01","time":"12:00 UTC-4","team1":"1L","team2":"3E/H/I/J/K","ground":"Atlanta"},{"round":"Round of 32","num":81,"date":"2026-07-01","time":"17:00 UTC-7","team1":"1D","team2":"3B/E/F/I/J","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Round of 32","num":82,"date":"2026-07-01","time":"13:00 UTC-7","team1":"1G","team2":"3A/E/H/I/J","ground":"Seattle"},{"round":"Round of 32","num":83,"date":"2026-07-02","time":"19:00 UTC-4","team1":"2K","team2":"2L","ground":"Toronto"},{"round":"Round of 32","num":84,"date":"2026-07-02","time":"12:00 UTC-7","team1":"1H","team2":"2J","ground":"Los Angeles (Inglewood)"},{"round":"Round of 32","num":85,"date":"2026-07-02","time":"20:00 UTC-7","team1":"1B","team2":"3E/F/G/I/J","ground":"Vancouver"},{"round":"Round of 32","num":86,"date":"2026-07-03","time":"18:00 UTC-4","team1":"1J","team2":"2H","ground":"Miami (Miami Gardens)"},{"round":"Round of 32","num":87,"date":"2026-07-03","time":"20:30 UTC-5","team1":"1K","team2":"3D/E/I/J/L","ground":"Kansas City"},{"round":"Round of 32","num":88,"date":"2026-07-03","time":"13:00 UTC-5","team1":"2D","team2":"2G","ground":"Dallas (Arlington)"},{"round":"Round of 16","num":89,"date":"2026-07-04","time":"17:00 UTC-4","team1":"W74","team2":"W77","ground":"Philadelphia"},{"round":"Round of 16","num":90,"date":"2026-07-04","time":"12:00 UTC-5","team1":"W73","team2":"W75","ground":"Houston"},{"round":"Round of 16","num":91,"date":"2026-07-05","time":"16:00 UTC-4","team1":"W76","team2":"W78","ground":"New York/New Jersey (East Rutherford)"},{"round":"Round of 16","num":92,"date":"2026-07-05","time":"18:00 UTC-6","team1":"W79","team2":"W80","ground":"Mexico City"},{"round":"Round of 16","num":93,"date":"2026-07-06","time":"14:00 UTC-5","team1":"W83","team2":"W84","ground":"Dallas (Arlington)"},{"round":"Round of 16","num":94,"date":"2026-07-06","time":"17:00 UTC-7","team1":"W81","team2":"W82","ground":"Seattle"},{"round":"Round of 16","num":95,"date":"2026-07-07","time":"12:00 UTC-4","team1":"W86","team2":"W88","ground":"Atlanta"},{"round":"Round of 16","num":96,"date":"2026-07-07","time":"13:00 UTC-7","team1":"W85","team2":"W87","ground":"Vancouver"},{"round":"Quarter-final","num":97,"date":"2026-07-09","time":"16:00 UTC-4","team1":"W89","team2":"W90","ground":"Boston (Foxborough)"},{"round":"Quarter-final","num":98,"date":"2026-07-10","time":"12:00 UTC-7","team1":"W93","team2":"W94","ground":"Los Angeles (Inglewood)"},{"round":"Quarter-final","num":99,"date":"2026-07-11","time":"17:00 UTC-4","team1":"W91","team2":"W92","ground":"Miami (Miami Gardens)"},{"round":"Quarter-final","num":100,"date":"2026-07-11","time":"20:00 UTC-5","team1":"W95","team2":"W96","ground":"Kansas City"},{"round":"Semi-final","num":101,"date":"2026-07-14","time":"14:00 UTC-5","team1":"W97","team2":"W98","ground":"Dallas (Arlington)"},{"round":"Semi-final","num":102,"date":"2026-07-15","time":"15:00 UTC-4","team1":"W99","team2":"W100","ground":"Atlanta"},{"round":"Match for third place","num":103,"date":"2026-07-18","time":"17:00 UTC-4","team1":"L101","team2":"L102","ground":"Miami (Miami Gardens)"},{"round":"Final","num":104,"date":"2026-07-19","time":"15:00 UTC-4","team1":"W101","team2":"W102","ground":"New York/New Jersey (East Rutherford)"}]};
+const SEED_JSON={"name":"World Cup 2026","matches":[{"round":"Matchday 1","date":"2026-06-11","time":"13:00 UTC-6","team1":"Mexico","team2":"South Africa","score":{"ft":[2,0],"ht":[1,0]},"goals1":[{"name":"Julián Quiñones","minute":"9"},{"name":"Raúl Jiménez","minute":"67"}],"goals2":[],"group":"Group A","ground":"Mexico City"},{"round":"Matchday 1","date":"2026-06-11","time":"20:00 UTC-6","team1":"South Korea","team2":"Czech Republic","score":{"ft":[2,1],"ht":[0,0]},"goals1":[{"name":"Hwang In-Beom","minute":"67"},{"name":"Oh Hyeon-Gyu","minute":"80"}],"goals2":[{"name":"Ladislav Krejcí","minute":"59"}],"group":"Group A","ground":"Guadalajara (Zapopan)"},{"round":"Matchday 8","date":"2026-06-18","time":"12:00 UTC-4","team1":"Czech Republic","team2":"South Africa","group":"Group A","ground":"Atlanta"},{"round":"Matchday 8","date":"2026-06-18","time":"19:00 UTC-6","team1":"Mexico","team2":"South Korea","group":"Group A","ground":"Guadalajara (Zapopan)"},{"round":"Matchday 14","date":"2026-06-24","time":"19:00 UTC-6","team1":"Czech Republic","team2":"Mexico","group":"Group A","ground":"Mexico City"},{"round":"Matchday 14","date":"2026-06-24","time":"19:00 UTC-6","team1":"South Africa","team2":"South Korea","group":"Group A","ground":"Monterrey (Guadalupe)"},{"round":"Matchday 2","date":"2026-06-12","time":"15:00 UTC-4","team1":"Canada","team2":"Bosnia & Herzegovina","group":"Group B","ground":"Toronto"},{"round":"Matchday 3","date":"2026-06-13","time":"12:00 UTC-7","team1":"Qatar","team2":"Switzerland","group":"Group B","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 8","date":"2026-06-18","time":"12:00 UTC-7","team1":"Switzerland","team2":"Bosnia & Herzegovina","group":"Group B","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 8","date":"2026-06-18","time":"15:00 UTC-7","team1":"Canada","team2":"Qatar","group":"Group B","ground":"Vancouver"},{"round":"Matchday 14","date":"2026-06-24","time":"12:00 UTC-7","team1":"Switzerland","team2":"Canada","group":"Group B","ground":"Vancouver"},{"round":"Matchday 14","date":"2026-06-24","time":"12:00 UTC-7","team1":"Bosnia & Herzegovina","team2":"Qatar","group":"Group B","ground":"Seattle"},{"round":"Matchday 3","date":"2026-06-13","time":"18:00 UTC-4","team1":"Brazil","team2":"Morocco","group":"Group C","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 3","date":"2026-06-13","time":"21:00 UTC-4","team1":"Haiti","team2":"Scotland","group":"Group C","ground":"Boston (Foxborough)"},{"round":"Matchday 9","date":"2026-06-19","time":"18:00 UTC-4","team1":"Scotland","team2":"Morocco","group":"Group C","ground":"Boston (Foxborough)"},{"round":"Matchday 9","date":"2026-06-19","time":"20:30 UTC-4","team1":"Brazil","team2":"Haiti","group":"Group C","ground":"Philadelphia"},{"round":"Matchday 14","date":"2026-06-24","time":"18:00 UTC-4","team1":"Scotland","team2":"Brazil","group":"Group C","ground":"Miami (Miami Gardens)"},{"round":"Matchday 14","date":"2026-06-24","time":"18:00 UTC-4","team1":"Morocco","team2":"Haiti","group":"Group C","ground":"Atlanta"},{"round":"Matchday 2","date":"2026-06-12","time":"18:00 UTC-7","team1":"USA","team2":"Paraguay","group":"Group D","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 3","date":"2026-06-13","time":"21:00 UTC-7","team1":"Australia","team2":"Turkey","group":"Group D","ground":"Vancouver"},{"round":"Matchday 9","date":"2026-06-19","time":"12:00 UTC-7","team1":"USA","team2":"Australia","group":"Group D","ground":"Seattle"},{"round":"Matchday 9","date":"2026-06-19","time":"20:00 UTC-7","team1":"Turkey","team2":"Paraguay","group":"Group D","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 15","date":"2026-06-25","time":"19:00 UTC-7","team1":"Turkey","team2":"USA","group":"Group D","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 15","date":"2026-06-25","time":"19:00 UTC-7","team1":"Paraguay","team2":"Australia","group":"Group D","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 4","date":"2026-06-14","time":"12:00 UTC-5","team1":"Germany","team2":"Curaçao","group":"Group E","ground":"Houston"},{"round":"Matchday 4","date":"2026-06-14","time":"19:00 UTC-4","team1":"Ivory Coast","team2":"Ecuador","group":"Group E","ground":"Philadelphia"},{"round":"Matchday 10","date":"2026-06-20","time":"16:00 UTC-4","team1":"Germany","team2":"Ivory Coast","group":"Group E","ground":"Toronto"},{"round":"Matchday 10","date":"2026-06-20","time":"19:00 UTC-5","team1":"Ecuador","team2":"Curaçao","group":"Group E","ground":"Kansas City"},{"round":"Matchday 15","date":"2026-06-25","time":"16:00 UTC-4","team1":"Curaçao","team2":"Ivory Coast","group":"Group E","ground":"Philadelphia"},{"round":"Matchday 15","date":"2026-06-25","time":"16:00 UTC-4","team1":"Ecuador","team2":"Germany","group":"Group E","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 4","date":"2026-06-14","time":"15:00 UTC-5","team1":"Netherlands","team2":"Japan","group":"Group F","ground":"Dallas (Arlington)"},{"round":"Matchday 4","date":"2026-06-14","time":"20:00 UTC-6","team1":"Sweden","team2":"Tunisia","group":"Group F","ground":"Monterrey (Guadalupe)"},{"round":"Matchday 10","date":"2026-06-20","time":"12:00 UTC-5","team1":"Netherlands","team2":"Sweden","group":"Group F","ground":"Houston"},{"round":"Matchday 10","date":"2026-06-20","time":"22:00 UTC-6","team1":"Tunisia","team2":"Japan","group":"Group F","ground":"Monterrey (Guadalupe)"},{"round":"Matchday 15","date":"2026-06-25","time":"18:00 UTC-5","team1":"Japan","team2":"Sweden","group":"Group F","ground":"Dallas (Arlington)"},{"round":"Matchday 15","date":"2026-06-25","time":"18:00 UTC-5","team1":"Tunisia","team2":"Netherlands","group":"Group F","ground":"Kansas City"},{"round":"Matchday 5","date":"2026-06-15","time":"12:00 UTC-7","team1":"Belgium","team2":"Egypt","group":"Group G","ground":"Seattle"},{"round":"Matchday 5","date":"2026-06-15","time":"18:00 UTC-7","team1":"Iran","team2":"New Zealand","group":"Group G","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 11","date":"2026-06-21","time":"12:00 UTC-7","team1":"Belgium","team2":"Iran","group":"Group G","ground":"Los Angeles (Inglewood)"},{"round":"Matchday 11","date":"2026-06-21","time":"18:00 UTC-7","team1":"New Zealand","team2":"Egypt","group":"Group G","ground":"Vancouver"},{"round":"Matchday 16","date":"2026-06-26","time":"20:00 UTC-7","team1":"Egypt","team2":"Iran","group":"Group G","ground":"Seattle"},{"round":"Matchday 16","date":"2026-06-26","time":"20:00 UTC-7","team1":"New Zealand","team2":"Belgium","group":"Group G","ground":"Vancouver"},{"round":"Matchday 5","date":"2026-06-15","time":"12:00 UTC-4","team1":"Spain","team2":"Cape Verde","group":"Group H","ground":"Atlanta"},{"round":"Matchday 5","date":"2026-06-15","time":"18:00 UTC-4","team1":"Saudi Arabia","team2":"Uruguay","group":"Group H","ground":"Miami (Miami Gardens)"},{"round":"Matchday 11","date":"2026-06-21","time":"12:00 UTC-4","team1":"Spain","team2":"Saudi Arabia","group":"Group H","ground":"Atlanta"},{"round":"Matchday 11","date":"2026-06-21","time":"18:00 UTC-4","team1":"Uruguay","team2":"Cape Verde","group":"Group H","ground":"Miami (Miami Gardens)"},{"round":"Matchday 16","date":"2026-06-26","time":"19:00 UTC-5","team1":"Cape Verde","team2":"Saudi Arabia","group":"Group H","ground":"Houston"},{"round":"Matchday 16","date":"2026-06-26","time":"18:00 UTC-6","team1":"Uruguay","team2":"Spain","group":"Group H","ground":"Guadalajara (Zapopan)"},{"round":"Matchday 6","date":"2026-06-16","time":"15:00 UTC-4","team1":"France","team2":"Senegal","group":"Group I","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 6","date":"2026-06-16","time":"18:00 UTC-4","team1":"Iraq","team2":"Norway","group":"Group I","ground":"Boston (Foxborough)"},{"round":"Matchday 12","date":"2026-06-22","time":"17:00 UTC-4","team1":"France","team2":"Iraq","group":"Group I","ground":"Philadelphia"},{"round":"Matchday 12","date":"2026-06-22","time":"20:00 UTC-4","team1":"Norway","team2":"Senegal","group":"Group I","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 16","date":"2026-06-26","time":"15:00 UTC-4","team1":"Norway","team2":"France","group":"Group I","ground":"Boston (Foxborough)"},{"round":"Matchday 16","date":"2026-06-26","time":"15:00 UTC-4","team1":"Senegal","team2":"Iraq","group":"Group I","ground":"Toronto"},{"round":"Matchday 6","date":"2026-06-16","time":"20:00 UTC-5","team1":"Argentina","team2":"Algeria","group":"Group J","ground":"Kansas City"},{"round":"Matchday 6","date":"2026-06-16","time":"21:00 UTC-7","team1":"Austria","team2":"Jordan","group":"Group J","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 12","date":"2026-06-22","time":"12:00 UTC-5","team1":"Argentina","team2":"Austria","group":"Group J","ground":"Dallas (Arlington)"},{"round":"Matchday 12","date":"2026-06-22","time":"20:00 UTC-7","team1":"Jordan","team2":"Algeria","group":"Group J","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Matchday 17","date":"2026-06-27","time":"21:00 UTC-5","team1":"Algeria","team2":"Austria","group":"Group J","ground":"Kansas City"},{"round":"Matchday 17","date":"2026-06-27","time":"21:00 UTC-5","team1":"Jordan","team2":"Argentina","group":"Group J","ground":"Dallas (Arlington)"},{"round":"Matchday 7","date":"2026-06-17","time":"12:00 UTC-5","team1":"Portugal","team2":"DR Congo","group":"Group K","ground":"Houston"},{"round":"Matchday 7","date":"2026-06-17","time":"20:00 UTC-6","team1":"Uzbekistan","team2":"Colombia","group":"Group K","ground":"Mexico City"},{"round":"Matchday 13","date":"2026-06-23","time":"12:00 UTC-5","team1":"Portugal","team2":"Uzbekistan","group":"Group K","ground":"Houston"},{"round":"Matchday 13","date":"2026-06-23","time":"20:00 UTC-6","team1":"Colombia","team2":"DR Congo","group":"Group K","ground":"Guadalajara (Zapopan)"},{"round":"Matchday 17","date":"2026-06-27","time":"19:30 UTC-4","team1":"Colombia","team2":"Portugal","group":"Group K","ground":"Miami (Miami Gardens)"},{"round":"Matchday 17","date":"2026-06-27","time":"19:30 UTC-4","team1":"DR Congo","team2":"Uzbekistan","group":"Group K","ground":"Atlanta"},{"round":"Matchday 7","date":"2026-06-17","time":"15:00 UTC-5","team1":"England","team2":"Croatia","group":"Group L","ground":"Dallas (Arlington)"},{"round":"Matchday 7","date":"2026-06-17","time":"19:00 UTC-4","team1":"Ghana","team2":"Panama","group":"Group L","ground":"Toronto"},{"round":"Matchday 13","date":"2026-06-23","time":"16:00 UTC-4","team1":"England","team2":"Ghana","group":"Group L","ground":"Boston (Foxborough)"},{"round":"Matchday 13","date":"2026-06-23","time":"19:00 UTC-4","team1":"Panama","team2":"Croatia","group":"Group L","ground":"Toronto"},{"round":"Matchday 17","date":"2026-06-27","time":"17:00 UTC-4","team1":"Panama","team2":"England","group":"Group L","ground":"New York/New Jersey (East Rutherford)"},{"round":"Matchday 17","date":"2026-06-27","time":"17:00 UTC-4","team1":"Croatia","team2":"Ghana","group":"Group L","ground":"Philadelphia"},{"round":"Round of 32","num":73,"date":"2026-06-28","time":"12:00 UTC-7","team1":"2A","team2":"2B","ground":"Los Angeles (Inglewood)"},{"round":"Round of 32","num":74,"date":"2026-06-29","time":"16:30 UTC-4","team1":"1E","team2":"3A/B/C/D/F","ground":"Boston (Foxborough)"},{"round":"Round of 32","num":75,"date":"2026-06-29","time":"19:00 UTC-6","team1":"1F","team2":"2C","ground":"Monterrey (Guadalupe)"},{"round":"Round of 32","num":76,"date":"2026-06-29","time":"12:00 UTC-5","team1":"1C","team2":"2F","ground":"Houston"},{"round":"Round of 32","num":77,"date":"2026-06-30","time":"17:00 UTC-4","team1":"1I","team2":"3C/D/F/G/H","ground":"New York/New Jersey (East Rutherford)"},{"round":"Round of 32","num":78,"date":"2026-06-30","time":"12:00 UTC-5","team1":"2E","team2":"2I","ground":"Dallas (Arlington)"},{"round":"Round of 32","num":79,"date":"2026-06-30","time":"19:00 UTC-6","team1":"1A","team2":"3C/E/F/H/I","ground":"Mexico City"},{"round":"Round of 32","num":80,"date":"2026-07-01","time":"12:00 UTC-4","team1":"1L","team2":"3E/H/I/J/K","ground":"Atlanta"},{"round":"Round of 32","num":81,"date":"2026-07-01","time":"17:00 UTC-7","team1":"1D","team2":"3B/E/F/I/J","ground":"San Francisco Bay Area (Santa Clara)"},{"round":"Round of 32","num":82,"date":"2026-07-01","time":"13:00 UTC-7","team1":"1G","team2":"3A/E/H/I/J","ground":"Seattle"},{"round":"Round of 32","num":83,"date":"2026-07-02","time":"19:00 UTC-4","team1":"2K","team2":"2L","ground":"Toronto"},{"round":"Round of 32","num":84,"date":"2026-07-02","time":"12:00 UTC-7","team1":"1H","team2":"2J","ground":"Los Angeles (Inglewood)"},{"round":"Round of 32","num":85,"date":"2026-07-02","time":"20:00 UTC-7","team1":"1B","team2":"3E/F/G/I/J","ground":"Vancouver"},{"round":"Round of 32","num":86,"date":"2026-07-03","time":"18:00 UTC-4","team1":"1J","team2":"2H","ground":"Miami (Miami Gardens)"},{"round":"Round of 32","num":87,"date":"2026-07-03","time":"20:30 UTC-5","team1":"1K","team2":"3D/E/I/J/L","ground":"Kansas City"},{"round":"Round of 32","num":88,"date":"2026-07-03","time":"13:00 UTC-5","team1":"2D","team2":"2G","ground":"Dallas (Arlington)"},{"round":"Round of 16","num":89,"date":"2026-07-04","time":"17:00 UTC-4","team1":"W74","team2":"W77","ground":"Philadelphia"},{"round":"Round of 16","num":90,"date":"2026-07-04","time":"12:00 UTC-5","team1":"W73","team2":"W75","ground":"Houston"},{"round":"Round of 16","num":91,"date":"2026-07-05","time":"16:00 UTC-4","team1":"W76","team2":"W78","ground":"New York/New Jersey (East Rutherford)"},{"round":"Round of 16","num":92,"date":"2026-07-05","time":"18:00 UTC-6","team1":"W79","team2":"W80","ground":"Mexico City"},{"round":"Round of 16","num":93,"date":"2026-07-06","time":"14:00 UTC-5","team1":"W83","team2":"W84","ground":"Dallas (Arlington)"},{"round":"Round of 16","num":94,"date":"2026-07-06","time":"17:00 UTC-7","team1":"W81","team2":"W82","ground":"Seattle"},{"round":"Round of 16","num":95,"date":"2026-07-07","time":"12:00 UTC-4","team1":"W86","team2":"W88","ground":"Atlanta"},{"round":"Round of 16","num":96,"date":"2026-07-07","time":"13:00 UTC-7","team1":"W85","team2":"W87","ground":"Vancouver"},{"round":"Quarter-final","num":97,"date":"2026-07-09","time":"16:00 UTC-4","team1":"W89","team2":"W90","ground":"Boston (Foxborough)"},{"round":"Quarter-final","num":98,"date":"2026-07-10","time":"12:00 UTC-7","team1":"W93","team2":"W94","ground":"Los Angeles (Inglewood)"},{"round":"Quarter-final","num":99,"date":"2026-07-11","time":"17:00 UTC-4","team1":"W91","team2":"W92","ground":"Miami (Miami Gardens)"},{"round":"Quarter-final","num":100,"date":"2026-07-11","time":"20:00 UTC-5","team1":"W95","team2":"W96","ground":"Kansas City"},{"round":"Semi-final","num":101,"date":"2026-07-14","time":"14:00 UTC-5","team1":"W97","team2":"W98","ground":"Dallas (Arlington)"},{"round":"Semi-final","num":102,"date":"2026-07-15","time":"15:00 UTC-4","team1":"W99","team2":"W100","ground":"Atlanta"},{"round":"Match for third place","num":103,"date":"2026-07-18","time":"17:00 UTC-4","team1":"L101","team2":"L102","ground":"Miami (Miami Gardens)"},{"round":"Final","num":104,"date":"2026-07-19","time":"15:00 UTC-4","team1":"W101","team2":"W102","ground":"New York/New Jersey (East Rutherford)"}]}
 const FALLBACK=SEED_JSON.matches||SEED_JSON;
 // ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
+async function forceUpdate(){
+  // Nuke all caches and re-register SW
+  if('caches' in window){
+    const keys=await caches.keys();
+    await Promise.all(keys.map(k=>caches.delete(k)));
+  }
+  if('serviceWorker' in navigator){
+    const regs=await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r=>r.unregister()));
+  }
+  window.location.reload(true);
+}
+
 updateClock();
 setInterval(updateClock,1000);
-setInterval(()=>{renderSchedule();renderGroups();renderBracket();},30000);
-setInterval(fetchData,3*60*1000);
+// Show build version
+const bv=document.getElementById('bver');
+if(bv)bv.textContent='v2026.06.12.07';
+// Faster refresh when matches are live
+function scheduleRefresh(){
+  const hasLive=MATCHES.some(m=>m.status==='live');
+  return hasLive?15000:60000; // 15s live, 60s otherwise
+}
+let _refreshTimer=null;
+function startRefreshLoop(){
+  if(_refreshTimer)clearInterval(_refreshTimer);
+  _refreshTimer=setInterval(async()=>{
+    await fetchData();
+    // Reschedule with potentially new interval
+    startRefreshLoop();
+  },scheduleRefresh());
+}
+setInterval(()=>{renderSchedule();renderGroups();renderBracket();},15000);
+startRefreshLoop();
 fetchData();
 
 // ═══════════════════════════════════════════
@@ -868,10 +1272,31 @@ fetchData();
 // ═══════════════════════════════════════════
 let deferredInstallPrompt = null;
 
+// Build version — visible in UI for cache debugging
+const BUILD_VERSION = 'v2026.06.12.07';
+
 if('serviceWorker' in navigator){
   window.addEventListener('load', async ()=>{
     try{
-      const reg = await navigator.serviceWorker.register('./sw.js', {scope:'./'});
+      // Unregister any stale service workers first
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for(const r of regs){
+        const swUrl = r.active?.scriptURL||'';
+        // If it's an old cached version, unregister
+        if(!swUrl.includes('sw.js')) await r.unregister();
+      }
+      const reg = await navigator.serviceWorker.register('./sw.js?v=v2026.06.12.07', {scope:'./'});
+      // Force immediate activation of new SW (skip waiting)
+      reg.addEventListener('updatefound', ()=>{
+        const newSW=reg.installing;
+        newSW.addEventListener('statechange',()=>{
+          if(newSW.state==='installed'&&navigator.serviceWorker.controller){
+            newSW.postMessage({type:'SKIP_WAITING'});
+            window.location.reload();
+          }
+        });
+      });
+      reg.update(); // check for updates immediately
       console.log('SW registered:', reg.scope);
       
       // Schedule background sync for match reminders every 30 min
